@@ -30,6 +30,7 @@ struct SettingsView: View {
                         section("Duplicate workouts") { duplicateContent }
                         section("Short workouts") { shortWorkoutContent }
                         section("Workout types") { excludeContent }
+                        section("Help & about") { aboutContent }
                     }
                     .padding()
                     .padding(.bottom, 24)
@@ -192,6 +193,62 @@ struct SettingsView: View {
                 AppSettings.excludedActivityIDs = excluded
             }
         )
+    }
+
+    // MARK: - Help & about
+
+    @ViewBuilder
+    private var aboutContent: some View {
+        linkRow(
+            title: "Support & FAQ",
+            symbol: "questionmark.circle.fill",
+            url: "https://pettifordo.github.io/HowFarMuch/support.html"
+        )
+        Divider().overlay(.white.opacity(0.1))
+        linkRow(
+            title: "Privacy Policy",
+            symbol: "hand.raised.fill",
+            url: "https://pettifordo.github.io/HowFarMuch/privacy.html"
+        )
+        Divider().overlay(.white.opacity(0.1))
+        HStack {
+            Label {
+                Text("Version")
+                    .font(.system(.body, design: .rounded, weight: .medium))
+            } icon: {
+                Image(systemName: "app.badge.checkmark")
+                    .foregroundStyle(.cyan)
+            }
+            Spacer()
+            Text(appVersion)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func linkRow(title: String, symbol: String, url: String) -> some View {
+        Link(destination: URL(string: url) ?? URL(fileURLWithPath: "/")) {
+            HStack {
+                Label {
+                    Text(title)
+                        .font(.system(.body, design: .rounded, weight: .medium))
+                        .foregroundStyle(.white)
+                } icon: {
+                    Image(systemName: symbol)
+                        .foregroundStyle(.cyan)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(version) (\(build))"
     }
 
     // MARK: - Section chrome
