@@ -57,12 +57,15 @@ enum DemoData {
             guard let weekAnchor = calendar.date(byAdding: .weekOfYear, value: -weekOffset, to: now) else {
                 continue
             }
-            for config in configs {
+            for (configIndex, config) in configs.enumerated() {
                 for occurrence in 0..<config.perWeek {
                     let daySpread = occurrence * (7 / max(1, config.perWeek))
+                    // Each activity gets its own time-of-day band so distinct demo
+                    // workouts never overlap (nobody runs and swims at once).
+                    let hour = 7 + configIndex * 2
                     guard let day = calendar.date(byAdding: .day, value: -daySpread, to: weekAnchor),
                           let start = calendar.date(
-                            bySettingHour: Int(random(7...19)), minute: Int(random(0...59)),
+                            bySettingHour: hour, minute: Int(random(0...25)),
                             second: 0, of: day
                           ),
                           start <= now else { continue }
@@ -77,7 +80,8 @@ enum DemoData {
                         distanceMeters: speed * minutes / 60 * 1000,
                         energyKilocalories: config.kcalPerMinute * minutes * random(0.9...1.1),
                         // A little fitter over time: same effort at a lower heart rate
-                        averageHeartRate: config.baseHeartRate - 5 * progress + random(-4...4)
+                        averageHeartRate: config.baseHeartRate - 5 * progress + random(-4...4),
+                        sourceName: "Apple Watch"
                     ))
                 }
             }
@@ -93,7 +97,8 @@ enum DemoData {
                 duration: record.duration * 0.97,
                 distanceMeters: record.distanceMeters * 0.99,
                 energyKilocalories: record.energyKilocalories * 1.02,
-                averageHeartRate: nil
+                averageHeartRate: nil,
+                sourceName: "iPhone"
             ))
         }
 
@@ -110,7 +115,8 @@ enum DemoData {
                 duration: record.duration * 0.75,
                 distanceMeters: record.distanceMeters * 0.7,
                 energyKilocalories: record.energyKilocalories * 0.75,
-                averageHeartRate: nil
+                averageHeartRate: nil,
+                sourceName: "VibePace"
             ))
         }
 
@@ -125,7 +131,8 @@ enum DemoData {
                     duration: 35,
                     distanceMeters: 25,
                     energyKilocalories: 2,
-                    averageHeartRate: nil
+                    averageHeartRate: nil,
+                    sourceName: "iPhone"
                 ))
             }
         }

@@ -169,7 +169,7 @@ final class SummaryViewModel {
                 overlapThreshold: AppSettings.overlapThreshold
             )
             result = deduplicated.kept
-            duplicatesIgnored = deduplicated.removedCount
+            duplicatesIgnored = deduplicated.removed.count
         } else {
             duplicatesIgnored = 0
         }

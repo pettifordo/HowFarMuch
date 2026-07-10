@@ -34,7 +34,8 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
             SettingsView(
                 availableTypes: viewModel.availableTypes,
-                rawWorkouts: viewModel.fetchedWorkouts
+                rawWorkouts: viewModel.fetchedWorkouts,
+                periodPhrase: viewModel.period.phrase
             )
         }
         .task { await viewModel.load() }

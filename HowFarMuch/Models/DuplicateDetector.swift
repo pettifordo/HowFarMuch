@@ -11,15 +11,22 @@ import Foundation
 ///   activity type or distance. You can't do two workouts at once, so heavy
 ///   overlap means one session recorded by two apps — e.g. a third-party
 ///   tracker on the phone plus an Outdoor Run on the watch.
+/// One ignored recording and the recording it was merged into.
+struct DuplicatePair: Identifiable {
+    let kept: WorkoutRecord
+    let removed: WorkoutRecord
+    var id: UUID { removed.id }
+}
+
 enum DuplicateDetector {
     static func deduplicate(
         _ records: [WorkoutRecord],
         acrossApps: Bool = false,
         overlapThreshold: Double = 0.5
-    ) -> (kept: [WorkoutRecord], removedCount: Int) {
+    ) -> (kept: [WorkoutRecord], removed: [DuplicatePair]) {
         let sorted = records.sorted { $0.start < $1.start }
         var kept: [WorkoutRecord] = []
-        var removed = 0
+        var removed: [DuplicatePair] = []
 
         for record in sorted {
             var matchIndex: Int?
@@ -32,17 +39,22 @@ enum DuplicateDetector {
                 }
             }
             if let matchIndex {
-                removed += 1
                 // Keep whichever copy carries more data.
                 if richness(record) > richness(kept[matchIndex]) {
+                    removed.append(DuplicatePair(kept: record, removed: kept[matchIndex]))
                     kept[matchIndex] = record
+                } else {
+                    removed.append(DuplicatePair(kept: kept[matchIndex], removed: record))
                 }
             } else {
                 kept.append(record)
             }
         }
 
-        return (kept.sorted { $0.start > $1.start }, removed)
+        return (
+            kept.sorted { $0.start > $1.start },
+            removed.sorted { $0.removed.start > $1.removed.start }
+        )
     }
 
     private static func isDuplicate(

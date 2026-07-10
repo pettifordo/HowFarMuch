@@ -27,12 +27,13 @@ struct WorkoutCSVExport: Transferable {
     }()
 
     func csvData() -> Data {
-        var lines = ["Date,Start Time,Activity,Duration (min),Distance (km),Distance (mi),Calories (kcal),Avg Heart Rate (bpm)"]
+        var lines = ["Date,Start Time,Activity,Source,Duration (min),Distance (km),Distance (mi),Calories (kcal),Avg Heart Rate (bpm)"]
         for workout in workouts.sorted(by: { $0.start > $1.start }) {
             let fields = [
                 Self.dateFormatter.string(from: workout.start),
                 Self.timeFormatter.string(from: workout.start),
                 workout.type.displayName,
+                (workout.sourceName ?? "").replacingOccurrences(of: ",", with: ";"),
                 String(format: "%.1f", workout.duration / 60),
                 String(format: "%.2f", workout.distanceMeters / 1000),
                 String(format: "%.2f", workout.distanceMeters / 1609.344),

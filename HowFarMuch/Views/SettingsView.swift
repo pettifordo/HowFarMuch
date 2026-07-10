@@ -7,6 +7,8 @@ struct SettingsView: View {
     /// Raw workouts for the current period, pre-exclusion and pre-dedupe,
     /// so the duplicate count can update live as settings change.
     let rawWorkouts: [WorkoutRecord]
+    /// e.g. "in the last 7 days" — the duplicate count is scoped to this.
+    let periodPhrase: String
 
     @Environment(\.dismiss) private var dismiss
     @AppStorage(AppSettings.distanceUnitKey) private var distanceUnitRaw
@@ -16,6 +18,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.overlapThresholdKey) private var overlapThreshold = 0.5
     @AppStorage(AppSettings.excludeShortWorkoutsKey) private var excludeShortWorkouts = false
     @State private var excluded = AppSettings.excludedActivityIDs
+    @State private var showDuplicateList = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +38,9 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showDuplicateList) {
+                DuplicateListView(pairs: duplicatePairs)
+            }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -60,8 +66,9 @@ struct SettingsView: View {
 
     // MARK: - Duplicates
 
-    private var liveDuplicateCount: Int {
-        guard detectDuplicates else { return 0 }
+    /// Recomputed live as any toggle or the slider changes.
+    private var duplicatePairs: [DuplicatePair] {
+        guard detectDuplicates else { return [] }
         var filtered = rawWorkouts.filter { !excluded.contains($0.type.rawValue) }
         if excludeShortWorkouts {
             filtered = filtered.filter { $0.duration >= AppSettings.shortWorkoutThreshold }
@@ -70,7 +77,7 @@ struct SettingsView: View {
             filtered,
             acrossApps: crossAppDuplicates,
             overlapThreshold: overlapThreshold
-        ).removedCount
+        ).removed
     }
 
     @ViewBuilder
@@ -80,6 +87,7 @@ struct SettingsView: View {
             .tint(.cyan)
         caption("Workouts of the same type that start within 10 minutes of each other with similar duration and distance count once — usually iPhone and Apple Watch both recording the same session.")
         if detectDuplicates {
+            duplicateCountRow
             Divider().overlay(.white.opacity(0.1))
             Toggle("Also match across apps", isOn: $crossAppDuplicates)
                 .font(.system(.body, design: .rounded, weight: .medium))
@@ -99,14 +107,43 @@ struct SettingsView: View {
                     .tint(.cyan)
                 caption("How much of the shorter workout must overlap in time to count as the same session. Lower is more aggressive and catches more; higher is safer if you sometimes do back-to-back workouts.")
             }
-            Label(
-                liveDuplicateCount == 1
-                    ? "1 workout ignored as a duplicate"
-                    : "\(liveDuplicateCount) workouts ignored as duplicates",
-                systemImage: "rectangle.on.rectangle.slash"
-            )
-            .font(.system(.caption, design: .rounded, weight: .semibold))
-            .foregroundStyle(.cyan)
+        }
+    }
+
+    @ViewBuilder
+    private var duplicateCountRow: some View {
+        let count = duplicatePairs.count
+        if count == 0 {
+            Label("No duplicates found \(periodPhrase)", systemImage: "checkmark.circle")
+                .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                .foregroundStyle(.secondary)
+        } else {
+            Button {
+                showDuplicateList = true
+            } label: {
+                HStack {
+                    Label(
+                        count == 1
+                            ? "1 duplicate found \(periodPhrase)"
+                            : "\(count) duplicates found \(periodPhrase)",
+                        systemImage: "rectangle.on.rectangle.slash"
+                    )
+                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .contentTransition(.numericText())
+                    Spacer()
+                    Text("View")
+                        .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundStyle(.cyan)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.cyan.opacity(0.1))
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -181,5 +218,9 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView(availableTypes: [.running, .cycling, .walking], rawWorkouts: [])
+    SettingsView(
+        availableTypes: [.running, .cycling, .walking],
+        rawWorkouts: [],
+        periodPhrase: "in the last 7 days"
+    )
 }

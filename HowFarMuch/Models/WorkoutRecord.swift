@@ -12,6 +12,8 @@ struct WorkoutRecord: Identifiable {
     let energyKilocalories: Double
     /// Beats per minute, when the workout recorded heart rate (usually Apple Watch).
     let averageHeartRate: Double?
+    /// Name of the app or device that recorded the workout (e.g. "Apple Watch").
+    let sourceName: String?
 }
 
 extension WorkoutRecord {
@@ -35,7 +37,8 @@ extension WorkoutRecord {
             duration: workout.duration,
             distanceMeters: distance,
             energyKilocalories: energy,
-            averageHeartRate: heartRate
+            averageHeartRate: heartRate,
+            sourceName: workout.sourceRevision.source.name
         )
     }
 }
