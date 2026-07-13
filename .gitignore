@@ -8,3 +8,6 @@ xcuserdata/
 
 # macOS
 .DS_Store
+
+# App Store screenshots (regenerated, not committed)
+AppStoreScreenshots/

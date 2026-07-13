@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @State private var viewModel = SummaryViewModel()
     @State private var showSettings = false
+    @State private var showRunningDetail = false
 
     var body: some View {
         NavigationStack {
@@ -30,6 +31,14 @@ struct ContentView: View {
                 .refreshable { await viewModel.load() }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showRunningDetail) {
+                ActivityDetailView(
+                    type: .running,
+                    workouts: viewModel.workouts(for: .running),
+                    periodPhrase: viewModel.period.phrase,
+                    defaultGrouping: viewModel.period.defaultGrouping
+                )
+            }
         }
         .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
             SettingsView(
@@ -38,7 +47,21 @@ struct ContentView: View {
                 periodPhrase: viewModel.period.phrase
             )
         }
-        .task { await viewModel.load() }
+        .task {
+            // Launch arguments below are only used by automated App Store
+            // screenshot capture (simctl launch with -periodYear etc.).
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("-periodYear") {
+                viewModel.period = .year
+            }
+            await viewModel.load()
+            if arguments.contains("-showSettingsOnLaunch") {
+                showSettings = true
+            }
+            if arguments.contains("-showRunningDetail") {
+                showRunningDetail = true
+            }
+        }
     }
 
     // MARK: - Share & export
@@ -154,7 +177,7 @@ struct ContentView: View {
                 .font(.system(.caption2, design: .rounded))
                 .foregroundStyle(.secondary)
             }
-            if viewModel.isDemoData {
+            if viewModel.isDemoData && !ProcessInfo.processInfo.arguments.contains("-hideDemoBadge") {
                 Label("Demo data — run on your iPhone to see real workouts", systemImage: "sparkles")
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.yellow.opacity(0.9))
