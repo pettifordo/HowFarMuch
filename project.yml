@@ -10,6 +10,10 @@ settings:
     TARGETED_DEVICE_FAMILY: "1"
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: Z454AW7UL3
+    # Single source of truth for versions — both targets' Info.plists
+    # reference these, so app and widget extension always match.
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: 2
 targets:
   HowFarMuch:
     type: application
@@ -20,6 +24,8 @@ targets:
       path: HowFarMuch/Info.plist
       properties:
         CFBundleDisplayName: How Far/Much
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -59,6 +65,8 @@ targets:
       path: HowFarMuchWidgets/Info.plist
       properties:
         CFBundleDisplayName: How Far/Much
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     entitlements:
