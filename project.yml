@@ -48,6 +48,9 @@ targets:
     dependencies:
       - target: HowFarMuchWidgets
         embed: true
+    # Explicit shared scheme so the app scheme always exists after regeneration
+    scheme:
+      configVariants: []
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
