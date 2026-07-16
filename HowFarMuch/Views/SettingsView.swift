@@ -17,6 +17,7 @@ struct SettingsView: View {
     @AppStorage(AppSettings.crossAppDuplicatesKey) private var crossAppDuplicates = false
     @AppStorage(AppSettings.overlapThresholdKey) private var overlapThreshold = 0.5
     @AppStorage(AppSettings.excludeShortWorkoutsKey) private var excludeShortWorkouts = false
+    @AppStorage(AppSettings.compactValuesKey) private var compactValues = false
     @State private var excluded = AppSettings.excludedActivityIDs
     @State private var showDuplicateList = false
 
@@ -27,6 +28,7 @@ struct SettingsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 22) {
                         section("Distance unit") { unitContent }
+                        section("Large values") { compactContent }
                         section("Duplicate workouts") { duplicateContent }
                         section("Short workouts") { shortWorkoutContent }
                         section("Workout types") { excludeContent }
@@ -63,6 +65,16 @@ struct SettingsView: View {
         }
         .pickerStyle(.segmented)
         caption("How Far distances are shown in this unit. Auto follows your region setting.")
+    }
+
+    // MARK: - Compact values
+
+    @ViewBuilder
+    private var compactContent: some View {
+        Toggle("Compact large values", isOn: $compactValues)
+            .font(.system(.body, design: .rounded, weight: .medium))
+            .tint(.cyan)
+        caption("Shows big numbers briefly — 69,319 kcal becomes 69.3K kcal — and long totals as days, weeks, months or years (128h 23m becomes 5d 8h). Applies in the app and in widgets.")
     }
 
     // MARK: - Duplicates

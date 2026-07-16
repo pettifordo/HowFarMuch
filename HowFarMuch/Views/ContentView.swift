@@ -167,6 +167,12 @@ struct ContentView: View {
                 .contentTransition(.numericText())
                 .animation(.spring(duration: 0.4), value: viewModel.heroValue)
 
+            if let heartRate = viewModel.averageHeartRate {
+                Label("avg \(Int(heartRate.rounded())) bpm", systemImage: "heart.fill")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.pink.opacity(0.9))
+            }
+
             if viewModel.duplicatesIgnored > 0 {
                 Label(
                     viewModel.duplicatesIgnored == 1

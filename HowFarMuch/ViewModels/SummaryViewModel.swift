@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import Observation
+import WidgetKit
 
 @MainActor
 @Observable
@@ -8,8 +9,12 @@ final class SummaryViewModel {
     var period: Period = .week {
         didSet { Task { await load() } }
     }
-    var metric: Metric = .far
-    var hiddenActivityIDs: Set<UInt> = []
+    var metric: Metric = .far {
+        didSet { publishSnapshot() }
+    }
+    var hiddenActivityIDs: Set<UInt> = [] {
+        didSet { publishSnapshot() }
+    }
     /// Everything fetched for the period, before settings exclusions and dedupe.
     var fetchedWorkouts: [WorkoutRecord] = []
     var allWorkouts: [WorkoutRecord] = []
@@ -80,6 +85,15 @@ final class SummaryViewModel {
         visibleStats.reduce(0) { $0 + metric.value(from: $1) }
     }
 
+    /// Time-weighted average heart rate across visible workouts that recorded one.
+    var averageHeartRate: Double? {
+        let withHeartRate = visibleWorkouts.filter { $0.averageHeartRate != nil && $0.duration > 0 }
+        let totalTime = withHeartRate.reduce(0) { $0 + $1.duration }
+        guard totalTime > 0 else { return nil }
+        let weighted = withHeartRate.reduce(0) { $0 + ($1.averageHeartRate ?? 0) * $1.duration }
+        return weighted / totalTime
+    }
+
     /// Largest per-activity value of the selected metric, for proportional bars.
     var maxMetricValue: Double {
         visibleStats.map { metric.value(from: $0) }.max() ?? 0
@@ -127,6 +141,26 @@ final class SummaryViewModel {
             loadDemoDataIfSimulator(reason: error.localizedDescription)
         }
         #endif
+        publishSnapshot()
+    }
+
+    /// Writes the current summary to the App Group so the widgets can show it.
+    private func publishSnapshot() {
+        let data = shareCardData
+        SummarySnapshot(
+            heroTitle: metric.rawValue,
+            heroValue: metric.formatted(heroValue),
+            periodPhrase: period.phrase,
+            activities: data.activities,
+            far: data.farText,
+            long: data.longText,
+            much: data.muchText,
+            many: data.manyText,
+            avgHeartRate: averageHeartRate.map { "\(Int($0.rounded())) bpm" },
+            isDemo: isDemoData,
+            updated: .now
+        ).save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// The simulator has no real workouts, so fall back to sample data there

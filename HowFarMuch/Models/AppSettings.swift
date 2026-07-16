@@ -26,6 +26,7 @@ enum AppSettings {
     static let crossAppDuplicatesKey = "crossAppDuplicates"
     static let overlapThresholdKey = "duplicateOverlapThreshold"
     static let excludeShortWorkoutsKey = "excludeShortWorkouts"
+    static let compactValuesKey = "compactValues"
     static let excludedActivitiesKey = "excludedActivities"
 
     /// Workouts shorter than this are hidden when `excludeShortWorkouts` is on.
@@ -83,6 +84,12 @@ enum AppSettings {
     static var excludeShortWorkouts: Bool {
         get { defaults.bool(forKey: excludeShortWorkoutsKey) }
         set { defaults.set(newValue, forKey: excludeShortWorkoutsKey) }
+    }
+
+    /// Show 69,319 kcal as "69.3K kcal" and long durations as weeks/months/years.
+    static var compactValues: Bool {
+        get { defaults.bool(forKey: compactValuesKey) }
+        set { defaults.set(newValue, forKey: compactValuesKey) }
     }
 
     /// Workout types hidden everywhere in the app (raw HKWorkoutActivityType values).

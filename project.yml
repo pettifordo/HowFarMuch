@@ -37,6 +37,11 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        com.apple.security.application-groups:
+          - group.com.owenpettiford.HowFarMuch
+    dependencies:
+      - target: HowFarMuchWidgets
+        embed: true
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"
@@ -44,3 +49,25 @@ targets:
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  HowFarMuchWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HowFarMuchWidgets
+      - path: HowFarMuch/Shared
+    info:
+      path: HowFarMuchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: How Far/Much
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: HowFarMuchWidgets/HowFarMuchWidgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.owenpettiford.HowFarMuch
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        PRODUCT_BUNDLE_IDENTIFIER: com.owenpettiford.HowFarMuch.Widgets
+        SKIP_INSTALL: true

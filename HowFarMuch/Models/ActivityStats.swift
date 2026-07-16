@@ -105,25 +105,32 @@ enum Metric: String, CaseIterable, Identifiable {
     }
 
     func formatted(_ value: Double) -> String {
+        let compact = AppSettings.compactValues
         switch self {
         case .far:
             let measurement = Measurement(value: value, unit: UnitLength.meters)
                 .converted(to: AppSettings.resolvedDistanceUnit)
+            if compact && measurement.value >= 10_000 {
+                return "\(ValueFormatting.compactNumber(measurement.value)) \(AppSettings.distanceUnitAbbreviation)"
+            }
             return measurement.formatted(.measurement(
                 width: .abbreviated,
                 usage: .asProvided,
                 numberFormatStyle: .number.precision(.fractionLength(0...1))
             ))
         case .long:
-            let hours = Int(value) / 3600
-            let minutes = (Int(value) % 3600) / 60
-            if hours > 0 { return "\(hours)h \(minutes)m" }
-            return "\(minutes)m"
+            return ValueFormatting.duration(value, compact: compact)
         case .much:
+            if compact && value >= 10_000 {
+                return "\(ValueFormatting.compactNumber(value)) kcal"
+            }
             return "\(Int(value.rounded()).formatted()) kcal"
         case .many:
             let count = Int(value)
-            return count == 1 ? "1 workout" : "\(count) workouts"
+            if compact && value >= 10_000 {
+                return "\(ValueFormatting.compactNumber(value)) workouts"
+            }
+            return count == 1 ? "1 workout" : "\(count.formatted()) workouts"
         }
     }
 }
