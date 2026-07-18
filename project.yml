@@ -13,7 +13,7 @@ settings:
     # Single source of truth for versions — both targets' Info.plists
     # reference these, so app and widget extension always match.
     MARKETING_VERSION: "2.0"
-    CURRENT_PROJECT_VERSION: 1
+    CURRENT_PROJECT_VERSION: 2
 targets:
   HowFarMuch:
     type: application
@@ -31,6 +31,7 @@ targets:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
+        CKSharingSupported: true
         NSHealthShareUsageDescription: >-
           How Far/Much reads your workouts from Apple Health to total up how far
           you've gone and how much you've done. Your data never leaves this device.
