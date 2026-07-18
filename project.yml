@@ -45,6 +45,10 @@ targets:
         com.apple.developer.healthkit.access: []
         com.apple.security.application-groups:
           - group.com.owenpettiford.HowFarMuch
+        com.apple.developer.icloud-services:
+          - CloudKit
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.owenpettiford.HowFarMuch
     dependencies:
       - target: HowFarMuchWidgets
         embed: true

@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var viewModel = SummaryViewModel()
+    @State private var friendsViewModel = FriendsViewModel()
     @State private var showSettings = false
     @State private var showRunningDetail = false
+    @State private var debugFriend: FriendsService.Friend?
 
     var body: some View {
         NavigationStack {
@@ -24,6 +26,12 @@ struct ContentView: View {
                             filterChips
                         }
                         activityList
+                        FriendsSectionView(
+                            friendsViewModel: friendsViewModel,
+                            period: viewModel.period,
+                            metric: viewModel.metric
+                        )
+                        .padding(.top, 12)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 32)
@@ -31,6 +39,13 @@ struct ContentView: View {
                 .refreshable { await viewModel.load() }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(item: $debugFriend) { friend in
+                FriendDetailView(
+                    friend: friend,
+                    initialPeriod: viewModel.period,
+                    friendsViewModel: friendsViewModel
+                )
+            }
             .navigationDestination(isPresented: $showRunningDetail) {
                 ActivityDetailView(
                     type: .running,
@@ -39,6 +54,9 @@ struct ContentView: View {
                     defaultGrouping: viewModel.period.defaultGrouping
                 )
             }
+        }
+        .sheet(item: $friendsViewModel.sharePresentation) { presentation in
+            CloudSharingView(share: presentation.share, container: presentation.container)
         }
         .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
             SettingsView(
@@ -55,11 +73,15 @@ struct ContentView: View {
                 viewModel.period = .year
             }
             await viewModel.load()
+            await friendsViewModel.refresh()
             if arguments.contains("-showSettingsOnLaunch") {
                 showSettings = true
             }
             if arguments.contains("-showRunningDetail") {
                 showRunningDetail = true
+            }
+            if arguments.contains("-showFriendDetail") {
+                debugFriend = friendsViewModel.friends.first
             }
         }
     }

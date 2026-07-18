@@ -192,21 +192,8 @@ final class SummaryViewModel {
         }
         availableTypes = types.sorted { $0.displayName < $1.displayName }
 
-        var result = records.filter { !excluded.contains($0.type.rawValue) }
-        if AppSettings.excludeShortWorkouts {
-            result = result.filter { $0.duration >= AppSettings.shortWorkoutThreshold }
-        }
-        if AppSettings.detectDuplicates {
-            let deduplicated = DuplicateDetector.deduplicate(
-                result,
-                acrossApps: AppSettings.crossAppDuplicates,
-                overlapThreshold: AppSettings.overlapThreshold
-            )
-            result = deduplicated.kept
-            duplicatesIgnored = deduplicated.removed.count
-        } else {
-            duplicatesIgnored = 0
-        }
-        return result
+        let filtered = WorkoutFilters.apply(records)
+        duplicatesIgnored = filtered.duplicatesIgnored
+        return filtered.kept
     }
 }

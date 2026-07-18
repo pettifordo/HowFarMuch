@@ -27,6 +27,10 @@ enum AppSettings {
     static let overlapThresholdKey = "duplicateOverlapThreshold"
     static let excludeShortWorkoutsKey = "excludeShortWorkouts"
     static let compactValuesKey = "compactValues"
+    static let shareTodayKey = "shareToday"
+    static let shareHeartRateKey = "shareHeartRate"
+    static let displayNameKey = "displayName"
+    static let displayEmojiKey = "displayEmoji"
     static let excludedActivitiesKey = "excludedActivities"
 
     /// Workouts shorter than this are hidden when `excludeShortWorkouts` is on.
@@ -90,6 +94,37 @@ enum AppSettings {
     static var compactValues: Bool {
         get { defaults.bool(forKey: compactValuesKey) }
         set { defaults.set(newValue, forKey: compactValuesKey) }
+    }
+
+    // MARK: Friends sharing preferences
+
+    /// Whether today's totals are included in the shared feed (default true;
+    /// turning it off avoids "they're out right now" signals).
+    static var shareToday: Bool {
+        get { defaults.object(forKey: shareTodayKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: shareTodayKey) }
+    }
+
+    /// Heart rate is the most personal number — off by default.
+    static var shareHeartRate: Bool {
+        get { defaults.bool(forKey: shareHeartRateKey) }
+        set { defaults.set(newValue, forKey: shareHeartRateKey) }
+    }
+
+    static var displayName: String {
+        get {
+            let stored = defaults.string(forKey: displayNameKey) ?? ""
+            return stored.isEmpty ? "Me" : stored
+        }
+        set { defaults.set(newValue, forKey: displayNameKey) }
+    }
+
+    static var displayEmoji: String {
+        get {
+            let stored = defaults.string(forKey: displayEmojiKey) ?? ""
+            return stored.isEmpty ? "🏃" : stored
+        }
+        set { defaults.set(newValue, forKey: displayEmojiKey) }
     }
 
     /// Workout types hidden everywhere in the app (raw HKWorkoutActivityType values).

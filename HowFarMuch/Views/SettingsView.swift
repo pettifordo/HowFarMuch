@@ -18,6 +18,10 @@ struct SettingsView: View {
     @AppStorage(AppSettings.overlapThresholdKey) private var overlapThreshold = 0.5
     @AppStorage(AppSettings.excludeShortWorkoutsKey) private var excludeShortWorkouts = false
     @AppStorage(AppSettings.compactValuesKey) private var compactValues = false
+    @AppStorage(AppSettings.shareTodayKey) private var shareToday = true
+    @AppStorage(AppSettings.shareHeartRateKey) private var shareHeartRate = false
+    @AppStorage(AppSettings.displayNameKey) private var displayName = ""
+    @AppStorage(AppSettings.displayEmojiKey) private var displayEmoji = ""
     @State private var excluded = AppSettings.excludedActivityIDs
     @State private var showDuplicateList = false
 
@@ -32,6 +36,7 @@ struct SettingsView: View {
                         section("Duplicate workouts") { duplicateContent }
                         section("Short workouts") { shortWorkoutContent }
                         section("Workout types") { excludeContent }
+                        section("Sharing with friends") { sharingContent }
                         section("Help & about") { aboutContent }
                     }
                     .padding()
@@ -205,6 +210,45 @@ struct SettingsView: View {
                 AppSettings.excludedActivityIDs = excluded
             }
         )
+    }
+
+    // MARK: - Sharing with friends
+
+    @ViewBuilder
+    private var sharingContent: some View {
+        HStack {
+            Text("Your name")
+                .font(.system(.body, design: .rounded, weight: .medium))
+            Spacer()
+            TextField("Me", text: $displayName)
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
+                .frame(maxWidth: 160)
+        }
+        Divider().overlay(.white.opacity(0.1))
+        HStack {
+            Text("Your emoji")
+                .font(.system(.body, design: .rounded, weight: .medium))
+            Spacer()
+            TextField("🏃", text: $displayEmoji)
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.plain)
+                .frame(maxWidth: 60)
+                .onChange(of: displayEmoji) { _, newValue in
+                    if newValue.count > 2 {
+                        displayEmoji = String(newValue.suffix(2))
+                    }
+                }
+        }
+        Divider().overlay(.white.opacity(0.1))
+        Toggle("Share today's totals", isOn: $shareToday)
+            .font(.system(.body, design: .rounded, weight: .medium))
+            .tint(.cyan)
+        caption("Turning this off shares weekly totals and up, so friends can't tell whether you're out right now.")
+        Toggle("Share average heart rate", isOn: $shareHeartRate)
+            .font(.system(.body, design: .rounded, weight: .medium))
+            .tint(.cyan)
+        caption("Friends only ever see totals — never individual workouts, times or routes. Excluded workout types stay hidden from friends too.")
     }
 
     // MARK: - Help & about
