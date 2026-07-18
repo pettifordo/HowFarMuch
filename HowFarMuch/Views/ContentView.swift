@@ -56,7 +56,7 @@ struct ContentView: View {
             }
         }
         .sheet(item: $friendsViewModel.sharePresentation) { presentation in
-            CloudSharingView(share: presentation.share, container: presentation.container)
+            InviteSheetView(share: presentation.share, container: presentation.container)
         }
         .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
             SettingsView(

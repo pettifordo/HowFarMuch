@@ -96,12 +96,16 @@ final class FriendsService {
         try await ensureAccount()
         try await ensureZone()
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+        let title = "How Far/Much — \(AppSettings.displayName)'s workouts"
         if let existing = try? await privateDB.record(for: shareID) as? CKShare {
+            // Keep the title current with the user's display name.
+            existing[CKShare.SystemFieldKey.title] = title
+            _ = try? await privateDB.modifyRecords(saving: [existing], deleting: [], savePolicy: .changedKeys)
             return (existing, container)
         }
         let share = CKShare(recordZoneID: zoneID)
         share.publicPermission = .none
-        share[CKShare.SystemFieldKey.title] = "How Far/Much — \(AppSettings.displayName)'s workouts"
+        share[CKShare.SystemFieldKey.title] = title
         _ = try await privateDB.modifyRecords(saving: [share], deleting: [], savePolicy: .changedKeys)
         return (share, container)
     }
