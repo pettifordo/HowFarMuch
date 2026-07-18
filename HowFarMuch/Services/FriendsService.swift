@@ -98,15 +98,25 @@ final class FriendsService {
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
         let title = "How Far/Much — \(AppSettings.displayName)'s workouts"
         if let existing = try? await privateDB.record(for: shareID) as? CKShare {
-            // Keep the title current with the user's display name.
+            // Keep the title and permission current, then re-fetch so the
+            // record carries the server-generated share URL.
             existing[CKShare.SystemFieldKey.title] = title
+            existing.publicPermission = .readWrite
             _ = try? await privateDB.modifyRecords(saving: [existing], deleting: [], savePolicy: .changedKeys)
+            if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
+                return (refreshed, container)
+            }
             return (existing, container)
         }
         let share = CKShare(recordZoneID: zoneID)
-        share.publicPermission = .none
+        // Open-by-link: the URL itself is the invitation. Avoids the fragile
+        // per-recipient participant registration in the Messages flow.
+        share.publicPermission = .readWrite
         share[CKShare.SystemFieldKey.title] = title
         _ = try await privateDB.modifyRecords(saving: [share], deleting: [], savePolicy: .changedKeys)
+        if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
+            return (refreshed, container)
+        }
         return (share, container)
     }
 

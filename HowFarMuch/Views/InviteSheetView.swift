@@ -23,6 +23,7 @@ struct InviteSheetView: View {
     let container: CKContainer
 
     @Environment(\.dismiss) private var dismiss
+    @State private var linkCopied = false
 
     private var shareTitle: String {
         share[CKShare.SystemFieldKey.title] as? String ?? "How Far/Much"
@@ -85,6 +86,30 @@ struct InviteSheetView: View {
                         .foregroundStyle(.black)
                 }
                 .buttonStyle(.plain)
+
+                if let url = share.url {
+                    Button {
+                        UIPasteboard.general.url = url
+                        linkCopied = true
+                    } label: {
+                        Label(linkCopied ? "Link Copied!" : "Copy Link", systemImage: "link")
+                            .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(.white.opacity(0.08)))
+                            .foregroundStyle(.cyan)
+                    }
+                    .buttonStyle(.plain)
+                    Text("Anyone with the link can join, so only send it to people you trust. Paste it into Messages if the button above misbehaves.")
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                } else {
+                    Text("iCloud hasn't generated the share link yet. Check that iCloud Drive is on (Settings → your name → iCloud → iCloud Drive), then close and reopen this sheet.")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.orange)
+                        .multilineTextAlignment(.center)
+                }
 
                 Button("Done") { dismiss() }
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
