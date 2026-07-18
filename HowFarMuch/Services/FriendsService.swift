@@ -53,6 +53,37 @@ final class FriendsService {
         CKRecordZone.ID(zoneName: Self.zoneName, ownerName: CKCurrentUserDefaultName)
     }
 
+    // MARK: - Saving (modifyRecords does NOT throw for per-record failures —
+    // they come back in the results and must be surfaced explicitly)
+
+    private func save(_ records: [CKRecord], to database: CKDatabase) async throws {
+        let results = try await database.modifyRecords(
+            saving: records,
+            deleting: [],
+            savePolicy: .changedKeys
+        )
+        for (_, result) in results.saveResults {
+            if case .failure(let error) = result { throw error }
+        }
+    }
+
+    /// Maps raw CloudKit errors to messages a user can act on.
+    static func friendlyMessage(for error: Error) -> String {
+        guard let ckError = error as? CKError else { return error.localizedDescription }
+        switch ckError.code {
+        case .quotaExceeded:
+            return "Your iCloud storage is full — sharing needs a small amount of free space. (Settings → your name → iCloud)"
+        case .networkUnavailable, .networkFailure:
+            return "No connection to iCloud — check your internet and try again."
+        case .notAuthenticated:
+            return "Sign in to iCloud in Settings to share with friends."
+        case .permissionFailure:
+            return "iCloud refused permission for this action (CloudKit error 10)."
+        default:
+            return "CloudKit error \(ckError.code.rawValue): \(ckError.localizedDescription)"
+        }
+    }
+
     // MARK: - Account
 
     func ensureAccount() async throws {
@@ -80,12 +111,15 @@ final class FriendsService {
         }
         record["payload"] = String(data: try JSONEncoder().encode(feed), encoding: .utf8)
         record["updated"] = feed.updated
-        _ = try await privateDB.modifyRecords(saving: [record], deleting: [], savePolicy: .changedKeys)
+        try await save([record], to: privateDB)
     }
 
     private func ensureZone() async throws {
         let zone = CKRecordZone(zoneID: zoneID)
-        _ = try await privateDB.modifyRecordZones(saving: [zone], deleting: [])
+        let results = try await privateDB.modifyRecordZones(saving: [zone], deleting: [])
+        for (_, result) in results.saveResults {
+            if case .failure(let error) = result { throw error }
+        }
     }
 
     // MARK: - Sharing my zone
@@ -102,7 +136,7 @@ final class FriendsService {
             // record carries the server-generated share URL.
             existing[CKShare.SystemFieldKey.title] = title
             existing.publicPermission = .readWrite
-            _ = try? await privateDB.modifyRecords(saving: [existing], deleting: [], savePolicy: .changedKeys)
+            try await save([existing], to: privateDB)
             if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
                 return (refreshed, container)
             }
@@ -113,7 +147,7 @@ final class FriendsService {
         // per-recipient participant registration in the Messages flow.
         share.publicPermission = .readWrite
         share[CKShare.SystemFieldKey.title] = title
-        _ = try await privateDB.modifyRecords(saving: [share], deleting: [], savePolicy: .changedKeys)
+        try await save([share], to: privateDB)
         if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
             return (refreshed, container)
         }
@@ -176,7 +210,7 @@ final class FriendsService {
         // Keep the log bounded.
         if log.count > 50 { log.removeFirst(log.count - 50) }
         record["payload"] = String(data: try JSONEncoder().encode(log), encoding: .utf8)
-        _ = try await sharedDB.modifyRecords(saving: [record], deleting: [], savePolicy: .changedKeys)
+        try await save([record], to: sharedDB)
     }
 
     // MARK: - Reactions I've received

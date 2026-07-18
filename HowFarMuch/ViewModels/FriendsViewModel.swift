@@ -40,7 +40,7 @@ final class FriendsViewModel {
             receivedReactions = try await service.fetchReceivedReactions()
             statusMessage = nil
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = FriendsService.friendlyMessage(for: error)
         }
         #endif
     }
@@ -53,7 +53,7 @@ final class FriendsViewModel {
             let (share, container) = try await service.fetchOrCreateShare()
             sharePresentation = SharePresentation(share: share, container: container)
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = FriendsService.friendlyMessage(for: error)
         }
         #endif
     }
@@ -64,7 +64,7 @@ final class FriendsViewModel {
         do {
             try await service.sendReaction(kind, about: period, to: friend)
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = FriendsService.friendlyMessage(for: error)
             lastSentReaction[friend.id] = nil
         }
         #endif
