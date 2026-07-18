@@ -12,8 +12,8 @@ settings:
     DEVELOPMENT_TEAM: Z454AW7UL3
     # Single source of truth for versions — both targets' Info.plists
     # reference these, so app and widget extension always match.
-    MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: 2
+    MARKETING_VERSION: "2.0"
+    CURRENT_PROJECT_VERSION: 1
 targets:
   HowFarMuch:
     type: application
