@@ -133,9 +133,8 @@ final class FriendsService {
 
     // MARK: - Sharing my zone
 
-    /// Returns the existing zone-wide share, or creates one, for use with
-    /// UICloudSharingController.
-    func fetchOrCreateShare() async throws -> (CKShare, CKContainer) {
+    /// Returns the existing zone-wide share, or creates one, for the invite flow.
+    func fetchOrCreateShare() async throws -> (share: CKShare, container: CKContainer) {
         try await ensureAccount()
         try await ensureZone()
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
