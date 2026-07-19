@@ -41,7 +41,8 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         Task {
             do {
                 try await FriendsService().acceptShare(metadata: cloudKitShareMetadata)
-                NotificationCenter.default.post(name: .cloudShareAccepted, object: nil)
+                let ownerName = cloudKitShareMetadata.ownerIdentity.nameComponents?.formatted()
+                NotificationCenter.default.post(name: .cloudShareAccepted, object: ownerName)
             } catch {
                 NotificationCenter.default.post(
                     name: .cloudShareAcceptFailed,

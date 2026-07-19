@@ -65,11 +65,18 @@ struct ContentView: View {
                 Task { await friendsViewModel.refresh() }
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAccepted)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAccepted)) { note in
+            friendsViewModel.shareBackName = (note.object as? String) ?? "your friend"
+            friendsViewModel.showShareBackPrompt = true
             Task { await friendsViewModel.refresh() }
-            if AppSettings.displayName.isEmpty {
-                friendsViewModel.showNamePrompt = true
+        }
+        .alert("Following \(friendsViewModel.shareBackName)!", isPresented: $friendsViewModel.showShareBackPrompt) {
+            Button("Share My Totals Back") {
+                Task { await friendsViewModel.invite() }
             }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("You can now see \(friendsViewModel.shareBackName)'s workout totals. They won't see yours until you send them your own invite link.")
         }
         .alert("What should friends call you?", isPresented: $friendsViewModel.showNamePrompt) {
             TextField("Your name", text: $nameDraft)

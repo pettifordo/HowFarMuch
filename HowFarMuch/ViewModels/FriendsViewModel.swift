@@ -26,6 +26,9 @@ final class FriendsViewModel {
     /// or when sharing is active without one).
     var showNamePrompt = false
     private var invitePendingName = false
+    /// After accepting an invite: offer to share back so it's mutual.
+    var showShareBackPrompt = false
+    var shareBackName = "your friend"
 
     private let service = FriendsService()
     private let healthKit = HealthKitService()
@@ -48,7 +51,10 @@ final class FriendsViewModel {
             receivedReactions = try await service.fetchReceivedReactions()
             statusMessage = nil
             // Actively sharing without a name? Friends would see "A friend".
-            if AppSettings.displayName.isEmpty && (!friends.isEmpty || awaitingFeeds > 0) {
+            // (Skip while the share-back prompt is up — one dialog at a time;
+            // the invite flow has its own name gate anyway.)
+            if AppSettings.displayName.isEmpty && (!friends.isEmpty || awaitingFeeds > 0)
+                && !showShareBackPrompt {
                 showNamePrompt = true
             }
         } catch {
