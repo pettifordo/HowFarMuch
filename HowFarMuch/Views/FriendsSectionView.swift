@@ -41,6 +41,17 @@ struct FriendsSectionView: View {
                     .foregroundStyle(.orange)
             }
 
+            if friendsViewModel.awaitingFeeds > 0 {
+                Label(
+                    friendsViewModel.awaitingFeeds == 1
+                        ? "Invite accepted — totals appear once your friend opens the app"
+                        : "\(friendsViewModel.awaitingFeeds) invites accepted — totals appear once your friends open the app",
+                    systemImage: "hourglass"
+                )
+                .font(.system(.caption, design: .rounded, weight: .semibold))
+                .foregroundStyle(.cyan)
+            }
+
             if friendsViewModel.friends.isEmpty && friendsViewModel.statusMessage == nil {
                 Text("Invite someone to swap workout totals — you'll see each other's How Far, Long, Much and Many, and can trade Respect 🤜 and Whoops 🙈.")
                     .font(.system(.caption, design: .rounded))

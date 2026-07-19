@@ -13,6 +13,8 @@ struct SharePresentation: Identifiable {
 @Observable
 final class FriendsViewModel {
     var friends: [FriendsService.Friend] = []
+    /// Accepted shares whose owners haven't published a feed yet.
+    var awaitingFeeds = 0
     var receivedReactions: [Reaction] = []
     var statusMessage: String?
     var isLoading = false
@@ -36,7 +38,9 @@ final class FriendsViewModel {
             let allTime = try await healthKit.fetchWorkouts(from: .distantPast)
             let filtered = WorkoutFilters.apply(allTime).kept
             try await service.publish(feed: FeedBuilder.buildFeed(from: filtered))
-            friends = try await service.fetchFriends()
+            let result = try await service.fetchFriends()
+            friends = result.friends
+            awaitingFeeds = result.awaitingFeeds
             receivedReactions = try await service.fetchReceivedReactions()
             statusMessage = nil
         } catch {

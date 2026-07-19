@@ -162,20 +162,24 @@ final class FriendsService {
 
     // MARK: - Reading friends' feeds
 
-    func fetchFriends() async throws -> [Friend] {
+    /// Returns friends with published feeds, plus how many accepted shares are
+    /// still waiting for their owner to open the app and publish.
+    func fetchFriends() async throws -> (friends: [Friend], awaitingFeeds: Int) {
         try await ensureAccount()
         let zones = try await sharedDB.allRecordZones()
         var friends: [Friend] = []
+        var awaiting = 0
         for zone in zones where zone.zoneID.zoneName == Self.zoneName {
             let recordID = CKRecord.ID(recordName: Self.feedRecordName, zoneID: zone.zoneID)
             guard let record = try? await sharedDB.record(for: recordID),
                   let payload = record["payload"] as? String,
                   let feed = try? JSONDecoder().decode(FriendFeed.self, from: Data(payload.utf8)) else {
+                awaiting += 1
                 continue
             }
             friends.append(Friend(zoneID: zone.zoneID, feed: feed))
         }
-        return friends.sorted { $0.feed.name < $1.feed.name }
+        return (friends.sorted { $0.feed.name < $1.feed.name }, awaiting)
     }
 
     // MARK: - Giving Respect / Whoops

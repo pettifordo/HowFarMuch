@@ -28,13 +28,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     }
 }
 
+extension Notification.Name {
+    static let cloudShareAccepted = Notification.Name("cloudShareAccepted")
+    static let cloudShareAcceptFailed = Notification.Name("cloudShareAcceptFailed")
+}
+
 final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     func windowScene(
         _ windowScene: UIWindowScene,
         userDidAcceptCloudKitShareWith cloudKitShareMetadata: CKShare.Metadata
     ) {
         Task {
-            try? await FriendsService().acceptShare(metadata: cloudKitShareMetadata)
+            do {
+                try await FriendsService().acceptShare(metadata: cloudKitShareMetadata)
+                NotificationCenter.default.post(name: .cloudShareAccepted, object: nil)
+            } catch {
+                NotificationCenter.default.post(
+                    name: .cloudShareAcceptFailed,
+                    object: FriendsService.friendlyMessage(for: error)
+                )
+            }
         }
     }
 }

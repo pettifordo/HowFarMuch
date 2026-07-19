@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var viewModel = SummaryViewModel()
     @State private var friendsViewModel = FriendsViewModel()
     @State private var showSettings = false
@@ -57,6 +58,17 @@ struct ContentView: View {
         }
         .sheet(item: $friendsViewModel.sharePresentation) { presentation in
             InviteSheetView(share: presentation.share, container: presentation.container)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await friendsViewModel.refresh() }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAccepted)) { _ in
+            Task { await friendsViewModel.refresh() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAcceptFailed)) { note in
+            friendsViewModel.statusMessage = note.object as? String
         }
         .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
             SettingsView(
