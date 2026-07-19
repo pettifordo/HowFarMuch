@@ -38,7 +38,8 @@ struct InviteSheetView: View {
     var body: some View {
         ZStack {
             AppBackground()
-            VStack(spacing: 18) {
+            ScrollView {
+                VStack(spacing: 18) {
                 LogoMarkView()
                     .frame(width: 56, height: 56)
                 Text("Invite a friend")
@@ -114,10 +115,11 @@ struct InviteSheetView: View {
                 Button("Done") { dismiss() }
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
                     .foregroundStyle(.secondary)
+                }
+                .padding(24)
             }
-            .padding(24)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationBackground(Color(red: 0.05, green: 0.07, blue: 0.15))
     }
 }

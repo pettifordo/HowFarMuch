@@ -35,6 +35,9 @@ final class FriendsViewModel {
     private let service = FriendsService()
     private let healthKit = HealthKitService()
     private var myOwnerID: String?
+    /// Share created/fetched ahead of time so tapping Invite is instant.
+    private var preparedShare: (share: CKShare, container: CKContainer)?
+    private var didPrewarm = false
 
     /// Publishes my current feed (totals + reactions I've given) to CloudKit,
     /// and keeps a local copy for comparison.
@@ -77,6 +80,11 @@ final class FriendsViewModel {
                 && !showShareBackPrompt {
                 showNamePrompt = true
             }
+            // Prepare the share once in the background so Invite is instant.
+            if !didPrewarm && !AppSettings.displayName.isEmpty {
+                didPrewarm = true
+                Task { self.preparedShare = try? await self.service.fetchOrCreateShare() }
+            }
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)
         }
@@ -102,9 +110,15 @@ final class FriendsViewModel {
             showNamePrompt = true
             return
         }
+        // Fast path: use the pre-warmed share so the sheet appears immediately.
+        if let prepared = preparedShare {
+            sharePresentation = SharePresentation(share: prepared.share, container: prepared.container)
+            return
+        }
         do {
-            let (share, container) = try await service.fetchOrCreateShare()
-            sharePresentation = SharePresentation(share: share, container: container)
+            let result = try await service.fetchOrCreateShare()
+            preparedShare = result
+            sharePresentation = SharePresentation(share: result.share, container: result.container)
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)
         }
