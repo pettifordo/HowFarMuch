@@ -111,11 +111,10 @@ enum AppSettings {
         set { defaults.set(newValue, forKey: shareHeartRateKey) }
     }
 
+    /// Empty until the user sets one — callers prompt rather than defaulting
+    /// to something meaningless like "Me".
     static var displayName: String {
-        get {
-            let stored = defaults.string(forKey: displayNameKey) ?? ""
-            return stored.isEmpty ? "Me" : stored
-        }
+        get { defaults.string(forKey: displayNameKey) ?? "" }
         set { defaults.set(newValue, forKey: displayNameKey) }
     }
 

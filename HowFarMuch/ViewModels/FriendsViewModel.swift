@@ -22,6 +22,10 @@ final class FriendsViewModel {
     var sharePresentation: SharePresentation?
     /// Reaction just sent per friend id, for button feedback.
     var lastSentReaction: [String: ReactionKind] = [:]
+    /// Asks the user for a display name (before inviting, after accepting,
+    /// or when sharing is active without one).
+    var showNamePrompt = false
+    private var invitePendingName = false
 
     private let service = FriendsService()
     private let healthKit = HealthKitService()
@@ -43,16 +47,35 @@ final class FriendsViewModel {
             awaitingFeeds = result.awaitingFeeds
             receivedReactions = try await service.fetchReceivedReactions()
             statusMessage = nil
+            // Actively sharing without a name? Friends would see "A friend".
+            if AppSettings.displayName.isEmpty && (!friends.isEmpty || awaitingFeeds > 0) {
+                showNamePrompt = true
+            }
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)
         }
         #endif
     }
 
+    /// Called after the name prompt saves: republish under the new name and
+    /// continue an interrupted invite.
+    func nameSaved() async {
+        await refresh()
+        if invitePendingName {
+            invitePendingName = false
+            await invite()
+        }
+    }
+
     func invite() async {
         #if targetEnvironment(simulator)
         statusMessage = "Inviting friends needs iCloud, which isn't available in the simulator."
         #else
+        guard !AppSettings.displayName.isEmpty else {
+            invitePendingName = true
+            showNamePrompt = true
+            return
+        }
         do {
             let (share, container) = try await service.fetchOrCreateShare()
             sharePresentation = SharePresentation(share: share, container: container)
@@ -70,7 +93,13 @@ final class FriendsViewModel {
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)
             lastSentReaction[friend.id] = nil
+            return
         }
         #endif
+        // Reset the "Sent!" state so it's clear reactions can be sent again.
+        try? await Task.sleep(for: .seconds(1.5))
+        if lastSentReaction[friend.id] == kind {
+            lastSentReaction[friend.id] = nil
+        }
     }
 }

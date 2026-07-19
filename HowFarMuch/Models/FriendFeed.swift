@@ -101,8 +101,9 @@ enum FeedBuilder {
                 avgHeartRate: AppSettings.shareHeartRate ? averageHeartRate(of: inPeriod) : nil
             )
         }
+        let name = AppSettings.displayName
         return FriendFeed(
-            name: AppSettings.displayName,
+            name: name.isEmpty ? "A friend" : name,
             emoji: AppSettings.displayEmoji,
             updated: .now,
             buckets: buckets

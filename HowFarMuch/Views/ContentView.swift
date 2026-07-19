@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var friendsViewModel = FriendsViewModel()
     @State private var showSettings = false
     @State private var showRunningDetail = false
+    @State private var nameDraft = ""
     @State private var debugFriend: FriendsService.Friend?
 
     var body: some View {
@@ -66,11 +67,32 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .cloudShareAccepted)) { _ in
             Task { await friendsViewModel.refresh() }
+            if AppSettings.displayName.isEmpty {
+                friendsViewModel.showNamePrompt = true
+            }
+        }
+        .alert("What should friends call you?", isPresented: $friendsViewModel.showNamePrompt) {
+            TextField("Your name", text: $nameDraft)
+            Button("Save") {
+                let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                AppSettings.displayName = trimmed
+                Task { await friendsViewModel.nameSaved() }
+            }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("This is the name friends see next to your workout totals. You can change it any time in Settings → Sharing.")
         }
         .onReceive(NotificationCenter.default.publisher(for: .cloudShareAcceptFailed)) { note in
             friendsViewModel.statusMessage = note.object as? String
         }
-        .sheet(isPresented: $showSettings, onDismiss: { Task { await viewModel.load() } }) {
+        .sheet(isPresented: $showSettings, onDismiss: {
+            Task {
+                await viewModel.load()
+                // Republish so name/sharing changes reach friends promptly.
+                await friendsViewModel.refresh()
+            }
+        }) {
             SettingsView(
                 availableTypes: viewModel.availableTypes,
                 rawWorkouts: viewModel.fetchedWorkouts,

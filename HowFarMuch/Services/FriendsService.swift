@@ -130,7 +130,10 @@ final class FriendsService {
         try await ensureAccount()
         try await ensureZone()
         let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
-        let title = "How Far/Much — \(AppSettings.displayName)'s workouts"
+        let name = AppSettings.displayName
+        let title = name.isEmpty
+            ? "How Far/Much workouts"
+            : "How Far/Much — \(name)'s workouts"
         if let existing = try? await privateDB.record(for: shareID) as? CKShare {
             // Keep the title and permission current, then re-fetch so the
             // record carries the server-generated share URL.
