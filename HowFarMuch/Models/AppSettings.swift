@@ -31,6 +31,8 @@ enum AppSettings {
     static let shareHeartRateKey = "shareHeartRate"
     static let displayNameKey = "displayName"
     static let displayEmojiKey = "displayEmoji"
+    static let selectedPeriodKey = "selectedPeriod"
+    static let selectedMetricKey = "selectedMetric"
     static let excludedActivitiesKey = "excludedActivities"
 
     /// Workouts shorter than this are hidden when `excludeShortWorkouts` is on.
@@ -116,6 +118,18 @@ enum AppSettings {
     static var displayName: String {
         get { defaults.string(forKey: displayNameKey) ?? "" }
         set { defaults.set(newValue, forKey: displayNameKey) }
+    }
+
+    /// The dashboard period selection, remembered across launches.
+    static var selectedPeriod: Period {
+        get { Period(rawValue: defaults.string(forKey: selectedPeriodKey) ?? "") ?? .week }
+        set { defaults.set(newValue.rawValue, forKey: selectedPeriodKey) }
+    }
+
+    /// The dashboard metric selection, remembered across launches.
+    static var selectedMetric: Metric {
+        get { Metric(rawValue: defaults.string(forKey: selectedMetricKey) ?? "") ?? .far }
+        set { defaults.set(newValue.rawValue, forKey: selectedMetricKey) }
     }
 
     static var displayEmoji: String {

@@ -9,9 +9,14 @@ struct FriendsSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Friends")
-                    .font(.system(.title3, design: .rounded, weight: .heavy))
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Friends")
+                        .font(.system(.title3, design: .rounded, weight: .heavy))
+                    Text("\(metric.rawValue.lowercased()) \(period.phrase)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
                 if friendsViewModel.isDemo {
                     Text("demo")
                         .font(.system(.caption2, design: .rounded, weight: .semibold))

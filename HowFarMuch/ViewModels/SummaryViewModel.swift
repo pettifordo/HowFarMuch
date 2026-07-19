@@ -6,11 +6,17 @@ import WidgetKit
 @MainActor
 @Observable
 final class SummaryViewModel {
-    var period: Period = .week {
-        didSet { Task { await load() } }
+    var period: Period = AppSettings.selectedPeriod {
+        didSet {
+            AppSettings.selectedPeriod = period
+            Task { await load() }
+        }
     }
-    var metric: Metric = .far {
-        didSet { publishSnapshot() }
+    var metric: Metric = AppSettings.selectedMetric {
+        didSet {
+            AppSettings.selectedMetric = metric
+            publishSnapshot()
+        }
     }
     var hiddenActivityIDs: Set<UInt> = [] {
         didSet { publishSnapshot() }
