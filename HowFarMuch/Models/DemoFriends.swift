@@ -14,9 +14,9 @@ enum DemoFriends {
     static func receivedReactions() -> [Reaction] {
         [
             Reaction(id: UUID(), kind: .respect, periodType: Period.week.rawValue,
-                     fromName: "Cally", date: Date().addingTimeInterval(-2 * 3600)),
+                     fromName: "Cally", targetOwnerID: "_me", date: Date().addingTimeInterval(-2 * 3600)),
             Reaction(id: UUID(), kind: .whoops, periodType: Period.today.rawValue,
-                     fromName: "Steve", date: Date().addingTimeInterval(-26 * 3600)),
+                     fromName: "Steve", targetOwnerID: "_me", date: Date().addingTimeInterval(-26 * 3600)),
         ]
     }
 

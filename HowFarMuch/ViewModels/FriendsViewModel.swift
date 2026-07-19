@@ -13,6 +13,8 @@ struct SharePresentation: Identifiable {
 @Observable
 final class FriendsViewModel {
     var friends: [FriendsService.Friend] = []
+    /// My own published feed, for comparing myself against friends per period.
+    var myFeed: FriendFeed?
     /// Accepted shares whose owners haven't published a feed yet.
     var awaitingFeeds = 0
     var receivedReactions: [Reaction] = []
@@ -32,23 +34,41 @@ final class FriendsViewModel {
 
     private let service = FriendsService()
     private let healthKit = HealthKitService()
+    private var myOwnerID: String?
+
+    /// Publishes my current feed (totals + reactions I've given) to CloudKit,
+    /// and keeps a local copy for comparison.
+    private func publishMyFeed() async throws {
+        let allTime = try await healthKit.fetchWorkouts(from: .distantPast)
+        let filtered = WorkoutFilters.apply(allTime).kept
+        let feed = FeedBuilder.buildFeed(from: filtered)
+        try await service.publish(feed: feed)
+        myFeed = feed
+    }
 
     func refresh() async {
         #if targetEnvironment(simulator)
         friends = DemoFriends.friends()
         receivedReactions = DemoFriends.receivedReactions()
+        myFeed = FeedBuilder.buildFeed(from: DemoData.records(in: .allTime))
         isDemo = true
         #else
         isLoading = true
         defer { isLoading = false }
         do {
-            let allTime = try await healthKit.fetchWorkouts(from: .distantPast)
-            let filtered = WorkoutFilters.apply(allTime).kept
-            try await service.publish(feed: FeedBuilder.buildFeed(from: filtered))
+            if myOwnerID == nil { myOwnerID = try? await service.myOwnerID() }
+            try await publishMyFeed()
             let result = try await service.fetchFriends()
             friends = result.friends
             awaitingFeeds = result.awaitingFeeds
-            receivedReactions = try await service.fetchReceivedReactions()
+            // Received reactions are the ones friends aimed at me, pulled from
+            // their feeds.
+            if let mine = myOwnerID {
+                receivedReactions = friends
+                    .flatMap(\.feed.reactionsGiven)
+                    .filter { $0.targetOwnerID == mine }
+                    .sorted { $0.date > $1.date }
+            }
             statusMessage = nil
             // Actively sharing without a name? Friends would see "A friend".
             // (Skip while the share-back prompt is up — one dialog at a time;
@@ -94,8 +114,20 @@ final class FriendsViewModel {
     func sendReaction(_ kind: ReactionKind, about period: Period, to friend: FriendsService.Friend) async {
         lastSentReaction[friend.id] = kind
         #if !targetEnvironment(simulator)
+        // Record the reaction in my own list (tagged with the friend's owner id)
+        // and republish my feed — the friend reads it from there.
+        var given = AppSettings.reactionsGiven
+        given.append(Reaction(
+            id: UUID(),
+            kind: kind,
+            periodType: period.rawValue,
+            fromName: AppSettings.displayName,
+            targetOwnerID: friend.zoneID.ownerName,
+            date: .now
+        ))
+        AppSettings.reactionsGiven = given
         do {
-            try await service.sendReaction(kind, about: period, to: friend)
+            try await publishMyFeed()
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)
             lastSentReaction[friend.id] = nil

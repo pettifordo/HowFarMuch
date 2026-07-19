@@ -91,6 +91,11 @@ final class SummaryViewModel {
         visibleStats.reduce(0) { $0 + metric.value(from: $1) }
     }
 
+    /// My total for a given metric in the current period — for friend comparison.
+    func myValue(for metric: Metric) -> Double {
+        visibleStats.reduce(0) { $0 + metric.value(from: $1) }
+    }
+
     /// Time-weighted average heart rate across visible workouts that recorded one.
     var averageHeartRate: Double? {
         let withHeartRate = visibleWorkouts.filter { $0.averageHeartRate != nil && $0.duration > 0 }

@@ -1,13 +1,18 @@
 import SwiftUI
 
-struct ContentView: View {
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var viewModel = SummaryViewModel()
-    @State private var friendsViewModel = FriendsViewModel()
+/// The "Me" tab: your own workout totals — period, hero, metric, filters,
+/// per-activity cards. Settings gear sits at the top.
+struct DashboardView: View {
+    @Bindable var viewModel: SummaryViewModel
+    @Bindable var friendsViewModel: FriendsViewModel
+
     @State private var showSettings = false
-    @State private var showRunningDetail = false
-    @State private var nameDraft = ""
-    @State private var debugFriend: FriendsService.Friend?
+
+    private let brandGradient = LinearGradient(
+        colors: [.cyan, Color(red: 0.6, green: 0.95, blue: 0.3)],
+        startPoint: .leading,
+        endPoint: .trailing
+    )
 
     var body: some View {
         NavigationStack {
@@ -17,8 +22,6 @@ struct ContentView: View {
                     VStack(spacing: 20) {
                         HStack(spacing: 8) {
                             LogoHeaderView()
-                            shareButton
-                            csvButton
                             settingsButton
                         }
                         periodPicker
@@ -28,12 +31,6 @@ struct ContentView: View {
                             filterChips
                         }
                         activityList
-                        FriendsSectionView(
-                            friendsViewModel: friendsViewModel,
-                            period: viewModel.period,
-                            metric: viewModel.metric
-                        )
-                        .padding(.top, 12)
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 32)
@@ -41,62 +38,10 @@ struct ContentView: View {
                 .refreshable { await viewModel.load() }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(item: $debugFriend) { friend in
-                FriendDetailView(
-                    friend: friend,
-                    initialPeriod: viewModel.period,
-                    friendsViewModel: friendsViewModel
-                )
-            }
-            .navigationDestination(isPresented: $showRunningDetail) {
-                ActivityDetailView(
-                    type: .running,
-                    workouts: viewModel.workouts(for: .running),
-                    periodPhrase: viewModel.period.phrase,
-                    defaultGrouping: viewModel.period.defaultGrouping
-                )
-            }
-        }
-        .sheet(item: $friendsViewModel.sharePresentation) { presentation in
-            InviteSheetView(share: presentation.share, container: presentation.container)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                Task { await friendsViewModel.refresh() }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAccepted)) { note in
-            friendsViewModel.shareBackName = (note.object as? String) ?? "your friend"
-            friendsViewModel.showShareBackPrompt = true
-            Task { await friendsViewModel.refresh() }
-        }
-        .alert("Following \(friendsViewModel.shareBackName)!", isPresented: $friendsViewModel.showShareBackPrompt) {
-            Button("Share My Totals Back") {
-                Task { await friendsViewModel.invite() }
-            }
-            Button("Not Now", role: .cancel) {}
-        } message: {
-            Text("You can now see \(friendsViewModel.shareBackName)'s workout totals. They won't see yours until you send them your own invite link.")
-        }
-        .alert("What should friends call you?", isPresented: $friendsViewModel.showNamePrompt) {
-            TextField("Your name", text: $nameDraft)
-            Button("Save") {
-                let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { return }
-                AppSettings.displayName = trimmed
-                Task { await friendsViewModel.nameSaved() }
-            }
-            Button("Not Now", role: .cancel) {}
-        } message: {
-            Text("This is the name friends see next to your workout totals. You can change it any time in Settings → Sharing.")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .cloudShareAcceptFailed)) { note in
-            friendsViewModel.statusMessage = note.object as? String
         }
         .sheet(isPresented: $showSettings, onDismiss: {
             Task {
                 await viewModel.load()
-                // Republish so name/sharing changes reach friends promptly.
                 await friendsViewModel.refresh()
             }
         }) {
@@ -106,71 +51,19 @@ struct ContentView: View {
                 periodPhrase: viewModel.period.phrase
             )
         }
-        .task {
-            // Launch arguments below are only used by automated App Store
-            // screenshot capture (simctl launch with -periodYear etc.).
-            let arguments = ProcessInfo.processInfo.arguments
-            if arguments.contains("-periodYear") {
-                viewModel.period = .year
-            }
-            await viewModel.load()
-            await friendsViewModel.refresh()
-            if arguments.contains("-showSettingsOnLaunch") {
-                showSettings = true
-            }
-            if arguments.contains("-showRunningDetail") {
-                showRunningDetail = true
-            }
-            if arguments.contains("-showFriendDetail") {
-                debugFriend = friendsViewModel.friends.first
-            }
-        }
-    }
-
-    // MARK: - Share & export
-
-    private var shareButton: some View {
-        Menu {
-            ShareLink(
-                item: ShareCard(data: viewModel.shareCardData),
-                preview: SharePreview("My workouts — How Far/Much")
-            ) {
-                Label("Share as Image", systemImage: "photo")
-            }
-            ShareLink(item: viewModel.shareSummary) {
-                Label("Share as Text", systemImage: "text.alignleft")
-            }
-        } label: {
-            headerIcon("square.and.arrow.up")
-        }
-        .accessibilityLabel("Share summary")
-    }
-
-    private var csvButton: some View {
-        ShareLink(
-            item: WorkoutCSVExport(workouts: viewModel.visibleWorkouts),
-            preview: SharePreview("How Far/Much workouts (CSV)")
-        ) {
-            headerIcon("tablecells")
-        }
-        .accessibilityLabel("Export workouts as CSV")
     }
 
     private var settingsButton: some View {
         Button {
             showSettings = true
         } label: {
-            headerIcon("gearshape.fill")
+            Image(systemName: "gearshape.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.cyan)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(.white.opacity(0.08)))
         }
         .accessibilityLabel("Settings")
-    }
-
-    private func headerIcon(_ systemName: String) -> some View {
-        Image(systemName: systemName)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.cyan)
-            .frame(width: 38, height: 38)
-            .background(Circle().fill(.white.opacity(0.08)))
     }
 
     // MARK: - Period
@@ -190,11 +83,7 @@ struct ContentView: View {
                         .background(
                             Capsule().fill(
                                 viewModel.period == period
-                                    ? AnyShapeStyle(LinearGradient(
-                                        colors: [.cyan, Color(red: 0.6, green: 0.95, blue: 0.3)],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    ))
+                                    ? AnyShapeStyle(brandGradient)
                                     : AnyShapeStyle(.white.opacity(0.08))
                             )
                         )
@@ -220,13 +109,7 @@ struct ContentView: View {
                 .font(.system(size: 52, weight: .black, design: .rounded))
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.cyan, Color(red: 0.6, green: 0.95, blue: 0.3)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .foregroundStyle(brandGradient)
                 .contentTransition(.numericText())
                 .animation(.spring(duration: 0.4), value: viewModel.heroValue)
 
@@ -407,8 +290,4 @@ struct ContentView: View {
         .padding(.top, 48)
         .padding(.horizontal, 24)
     }
-}
-
-#Preview {
-    ContentView()
 }

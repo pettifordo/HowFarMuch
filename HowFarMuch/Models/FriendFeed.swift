@@ -5,14 +5,39 @@ import HealthKit
 
 /// Everything one person shares with their friends. Values are raw numbers so
 /// each viewer's own unit and compact-value settings format the display.
+///
+/// Reactions travel inside the feed: each person carries the reactions *they've
+/// given*, tagged with the recipient's owner id. This means friends only ever
+/// need READ access to each other's zones — nobody writes into anyone else's
+/// data — so the CloudKit share can be read-only ("can view", not "can make
+/// changes").
 struct FriendFeed: Codable {
     var name: String
     var emoji: String
     var updated: Date
     var buckets: [PeriodBucket]
+    var reactionsGiven: [Reaction]
 
     func bucket(for period: Period) -> PeriodBucket? {
         buckets.first { $0.periodType == period.rawValue }
+    }
+
+    init(name: String, emoji: String, updated: Date, buckets: [PeriodBucket], reactionsGiven: [Reaction] = []) {
+        self.name = name
+        self.emoji = emoji
+        self.updated = updated
+        self.buckets = buckets
+        self.reactionsGiven = reactionsGiven
+    }
+
+    // Tolerate feeds published by older builds that had no reactions field.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        emoji = try c.decode(String.self, forKey: .emoji)
+        updated = try c.decode(Date.self, forKey: .updated)
+        buckets = try c.decode([PeriodBucket].self, forKey: .buckets)
+        reactionsGiven = try c.decodeIfPresent([Reaction].self, forKey: .reactionsGiven) ?? []
     }
 }
 
@@ -68,6 +93,9 @@ struct Reaction: Codable, Identifiable {
     /// Which period the reaction was about (Period.rawValue).
     var periodType: String
     var fromName: String
+    /// CloudKit owner id of the friend this reaction is *for* — lets a reader
+    /// pick out the reactions aimed at them from a friend's feed.
+    var targetOwnerID: String
     var date: Date
 }
 
@@ -106,7 +134,8 @@ enum FeedBuilder {
             name: name.isEmpty ? "A friend" : name,
             emoji: AppSettings.displayEmoji,
             updated: .now,
-            buckets: buckets
+            buckets: buckets,
+            reactionsGiven: AppSettings.reactionsGiven
         )
     }
 

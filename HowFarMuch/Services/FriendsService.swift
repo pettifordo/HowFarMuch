@@ -5,13 +5,13 @@ import CloudKit
 ///
 /// Layout (see FRIENDS-DESIGN.md):
 /// - A custom zone "FriendFeed" in the owner's private database, shared as a
-///   whole via a zone-wide CKShare with read/write participants.
+///   whole via a zone-wide, **read-only** CKShare (open-by-link).
 /// - One "Feed" record (name "feed") holding the owner's entire published
-///   feed as JSON.
-/// - One "ReactionLog" record per participant (name "reactions|<userID>"),
-///   written by that participant — single writer per record, so no conflicts.
+///   feed as JSON, including the reactions that owner has given to friends.
 ///
-/// Every record is fetched by deterministic name; no queries, no indexes.
+/// Nobody writes into anyone else's zone — reactions ride out in each person's
+/// own feed — so friends need only read access. Every record is fetched by
+/// deterministic name; no queries, no indexes.
 final class FriendsService {
     enum FriendsError: LocalizedError {
         case notSignedIn
@@ -97,6 +97,15 @@ final class FriendsService {
         }
     }
 
+    /// My CloudKit owner id — the value that appears as `zoneID.ownerName` when
+    /// friends read my shared zone. Cached after the first lookup.
+    func myOwnerID() async throws -> String {
+        if let cached = AppSettings.cachedOwnerID { return cached }
+        let id = try await container.userRecordID().recordName
+        AppSettings.cachedOwnerID = id
+        return id
+    }
+
     // MARK: - Publishing my feed
 
     func publish(feed: FriendFeed) async throws {
@@ -138,7 +147,7 @@ final class FriendsService {
             // Keep the title and permission current, then re-fetch so the
             // record carries the server-generated share URL.
             existing[CKShare.SystemFieldKey.title] = title
-            existing.publicPermission = .readWrite
+            existing.publicPermission = .readOnly
             try await save([existing], to: privateDB)
             if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
                 return (refreshed, container)
@@ -146,9 +155,10 @@ final class FriendsService {
             return (existing, container)
         }
         let share = CKShare(recordZoneID: zoneID)
-        // Open-by-link: the URL itself is the invitation. Avoids the fragile
-        // per-recipient participant registration in the Messages flow.
-        share.publicPermission = .readWrite
+        // Open-by-link and read-only: the URL is the invitation, and friends can
+        // only view — so the system share sheet says "can view", not "can make
+        // changes". Reactions ride out in each person's own feed.
+        share.publicPermission = .readOnly
         share[CKShare.SystemFieldKey.title] = title
         try await save([share], to: privateDB)
         if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
@@ -186,60 +196,10 @@ final class FriendsService {
     }
 
     // MARK: - Giving Respect / Whoops
-
-    private func myReactionRecordID(in zoneID: CKRecordZone.ID) async throws -> CKRecord.ID {
-        let userID = try await container.userRecordID()
-        return CKRecord.ID(recordName: "reactions|\(userID.recordName)", zoneID: zoneID)
-    }
-
-    /// Appends a reaction to my log inside the friend's shared zone.
-    func sendReaction(_ kind: ReactionKind, about period: Period, to friend: Friend) async throws {
-        try await ensureAccount()
-        let recordID = try await myReactionRecordID(in: friend.zoneID)
-        let record: CKRecord
-        var log: [Reaction] = []
-        if let existing = try? await sharedDB.record(for: recordID) {
-            record = existing
-            if let payload = record["payload"] as? String,
-               let decoded = try? JSONDecoder().decode([Reaction].self, from: Data(payload.utf8)) {
-                log = decoded
-            }
-        } else {
-            record = CKRecord(recordType: "ReactionLog", recordID: recordID)
-        }
-        log.append(Reaction(
-            id: UUID(),
-            kind: kind,
-            periodType: period.rawValue,
-            fromName: AppSettings.displayName,
-            date: .now
-        ))
-        // Keep the log bounded.
-        if log.count > 50 { log.removeFirst(log.count - 50) }
-        record["payload"] = String(data: try JSONEncoder().encode(log), encoding: .utf8)
-        try await save([record], to: sharedDB)
-    }
-
-    // MARK: - Reactions I've received
-
-    /// Reads every participant's reaction log from my own zone.
-    func fetchReceivedReactions() async throws -> [Reaction] {
-        try await ensureAccount()
-        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
-        guard let share = try? await privateDB.record(for: shareID) as? CKShare else {
-            return []
-        }
-        var reactions: [Reaction] = []
-        for participant in share.participants where participant.role != .owner {
-            guard let userID = participant.userIdentity.userRecordID else { continue }
-            let recordID = CKRecord.ID(recordName: "reactions|\(userID.recordName)", zoneID: zoneID)
-            guard let record = try? await privateDB.record(for: recordID),
-                  let payload = record["payload"] as? String,
-                  let log = try? JSONDecoder().decode([Reaction].self, from: Data(payload.utf8)) else {
-                continue
-            }
-            reactions.append(contentsOf: log)
-        }
-        return reactions.sorted { $0.date > $1.date }
-    }
+    //
+    // A reaction is just an entry in my own feed tagged with the recipient's
+    // owner id (see FriendsViewModel.sendReaction, which persists it and
+    // republishes). Reading them back happens in the view model too, by
+    // filtering each friend's feed for reactions aimed at me — no writes into
+    // anyone else's zone, so read-only sharing is enough.
 }

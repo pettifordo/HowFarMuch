@@ -8,7 +8,7 @@ struct HowFarMuchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .preferredColorScheme(.dark)
         }
     }

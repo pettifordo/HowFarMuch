@@ -104,6 +104,16 @@ enum Metric: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The same metric read from a friend's shared period bucket.
+    func bucketValue(_ bucket: PeriodBucket) -> Double {
+        switch self {
+        case .far: return bucket.totalDistanceMeters
+        case .long: return bucket.totalDurationSeconds
+        case .much: return bucket.totalKilocalories
+        case .many: return Double(bucket.totalWorkouts)
+        }
+    }
+
     func formatted(_ value: Double) -> String {
         let compact = AppSettings.compactValues
         switch self {

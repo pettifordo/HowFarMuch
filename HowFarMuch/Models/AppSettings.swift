@@ -33,6 +33,8 @@ enum AppSettings {
     static let displayEmojiKey = "displayEmoji"
     static let selectedPeriodKey = "selectedPeriod"
     static let selectedMetricKey = "selectedMetric"
+    static let reactionsGivenKey = "reactionsGiven"
+    static let cachedOwnerIDKey = "cachedOwnerID"
     static let excludedActivitiesKey = "excludedActivities"
 
     /// Workouts shorter than this are hidden when `excludeShortWorkouts` is on.
@@ -138,6 +140,29 @@ enum AppSettings {
             return stored.isEmpty ? "🏃" : stored
         }
         set { defaults.set(newValue, forKey: displayEmojiKey) }
+    }
+
+    /// Reactions I've given to friends — travel out in my published feed.
+    static var reactionsGiven: [Reaction] {
+        get {
+            guard let data = defaults.data(forKey: reactionsGivenKey),
+                  let decoded = try? JSONDecoder().decode([Reaction].self, from: data) else {
+                return []
+            }
+            return decoded
+        }
+        set {
+            // Keep the list bounded so the feed stays small.
+            let trimmed = newValue.count > 100 ? Array(newValue.suffix(100)) : newValue
+            defaults.set(try? JSONEncoder().encode(trimmed), forKey: reactionsGivenKey)
+        }
+    }
+
+    /// My own CloudKit owner id, cached so reaction matching doesn't need a
+    /// round-trip every refresh.
+    static var cachedOwnerID: String? {
+        get { defaults.string(forKey: cachedOwnerIDKey) }
+        set { defaults.set(newValue, forKey: cachedOwnerIDKey) }
     }
 
     /// Workout types hidden everywhere in the app (raw HKWorkoutActivityType values).

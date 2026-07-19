@@ -25,6 +25,7 @@ struct FriendDetailView: View {
                     header
                     periodPicker
                     if let bucket {
+                        comparisonSection(bucket)
                         totalsGrid(bucket)
                         reactionButtons
                         activityCards(bucket)
@@ -82,6 +83,66 @@ struct FriendDetailView: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    // MARK: - You vs them
+
+    @ViewBuilder
+    private func comparisonSection(_ bucket: PeriodBucket) -> some View {
+        if let mine = friendsViewModel.myFeed?.bucket(for: period) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("You vs \(friend.feed.name)")
+                    .font(.system(.headline, design: .rounded))
+                ForEach(Metric.allCases) { metric in
+                    comparisonRow(metric, mine: mine, theirs: bucket)
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.white.opacity(0.06))
+            )
+        }
+    }
+
+    private func comparisonRow(_ metric: Metric, mine: PeriodBucket, theirs: PeriodBucket) -> some View {
+        let myVal = metric.bucketValue(mine)
+        let theirVal = metric.bucketValue(theirs)
+        let iLead = myVal >= theirVal
+        let maxVal = max(myVal, theirVal, 1)
+        return VStack(spacing: 4) {
+            HStack {
+                Label(metric.rawValue, systemImage: metric.symbolName)
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(metric.formatted(myVal))
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .foregroundStyle(.cyan)
+                Text("vs")
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Text(metric.formatted(theirVal))
+                    .font(.system(.caption, design: .rounded, weight: .bold))
+                    .foregroundStyle(Color(red: 0.6, green: 0.95, blue: 0.3))
+            }
+            GeometryReader { proxy in
+                HStack(spacing: 3) {
+                    Capsule().fill(.cyan)
+                        .frame(width: barWidth(myVal, maxVal, proxy.size.width))
+                    Capsule().fill(Color(red: 0.6, green: 0.95, blue: 0.3))
+                        .frame(width: barWidth(theirVal, maxVal, proxy.size.width))
+                    Spacer(minLength: 0)
+                }
+            }
+            .frame(height: 6)
+            .opacity(iLead ? 1 : 0.9)
+        }
+    }
+
+    private func barWidth(_ value: Double, _ maxVal: Double, _ total: CGFloat) -> CGFloat {
+        // Two half-width lanes; each bar fills its lane proportionally.
+        max(3, (total / 2 - 3) * value / maxVal)
     }
 
     // MARK: - Totals

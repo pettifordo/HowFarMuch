@@ -43,7 +43,7 @@ struct InviteSheetView: View {
                     .frame(width: 56, height: 56)
                 Text("Invite a friend")
                     .font(.system(.title2, design: .rounded, weight: .heavy))
-                Text("Send an iCloud invite link. Once they accept in How Far/Much, you'll see each other's totals — and can trade Respect 🤜 and Whoops 🙈.")
+                Text("Send this link and, once they accept, **they can see your totals**. To see theirs, they send you their own link back. It's view-only — friends never change your data or see individual workouts.")
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -100,7 +100,7 @@ struct InviteSheetView: View {
                             .foregroundStyle(.cyan)
                     }
                     .buttonStyle(.plain)
-                    Text("Anyone with the link can join, so only send it to people you trust. Paste it into Messages if the button above misbehaves.")
+                    Text("Anyone with the link can view your totals, so only send it to people you trust. Paste it into Messages if the button above misbehaves.")
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
