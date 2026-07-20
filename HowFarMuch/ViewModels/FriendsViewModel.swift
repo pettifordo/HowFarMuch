@@ -80,10 +80,12 @@ final class FriendsViewModel {
                 && !showShareBackPrompt {
                 showNamePrompt = true
             }
-            // Prepare the share once in the background so Invite is instant.
+            // Prepare the share once so Invite is instant. Done inline (not a
+            // detached Task) so it can't race the feed publish above and cause
+            // an atomic save failure.
             if !didPrewarm && !AppSettings.displayName.isEmpty {
                 didPrewarm = true
-                Task { self.preparedShare = try? await self.service.fetchOrCreateShare() }
+                preparedShare = try? await service.fetchOrCreateShare()
             }
         } catch {
             statusMessage = FriendsService.friendlyMessage(for: error)

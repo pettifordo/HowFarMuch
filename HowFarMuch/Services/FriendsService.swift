@@ -144,27 +144,7 @@ final class FriendsService {
         let title = name.isEmpty
             ? "How Far/Much workouts"
             : "How Far/Much — \(name)'s workouts"
-
-        // The feed record must exist to be a share root — publish first if needed.
         let feedID = CKRecord.ID(recordName: Self.feedRecordName, zoneID: zoneID)
-        let feedRecord: CKRecord
-        if let existing = try? await privateDB.record(for: feedID) {
-            feedRecord = existing
-        } else {
-            feedRecord = CKRecord(recordType: "Feed", recordID: feedID)
-            feedRecord["payload"] = String(
-                data: try JSONEncoder().encode(FeedBuilder.buildFeed(from: [])),
-                encoding: .utf8
-            )
-        }
-
-        // Reuse the existing root-record share if there is one.
-        if let shareRef = feedRecord.share,
-           let existingShare = try? await privateDB.record(for: shareRef.recordID) as? CKShare {
-            existingShare[CKShare.SystemFieldKey.title] = title
-            try? await save([existingShare], to: privateDB)
-            return (existingShare, container)
-        }
 
         // Remove any legacy zone-wide share from earlier builds to avoid conflicts.
         let legacyShareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
@@ -172,22 +152,53 @@ final class FriendsService {
             _ = try? await privateDB.modifyRecords(saving: [], deleting: [legacyShareID])
         }
 
-        let share = CKShare(rootRecord: feedRecord)
-        share.publicPermission = .none  // invited people only — no open link
-        share[CKShare.SystemFieldKey.title] = title
-        // Root record and its share must be saved together.
-        let results = try await privateDB.modifyRecords(
-            saving: [feedRecord, share],
-            deleting: [],
-            savePolicy: .changedKeys
-        )
-        for (_, result) in results.saveResults {
-            if case .failure(let error) = result { throw error }
+        // Re-fetch the root record and attempt the atomic save; if a concurrent
+        // publish changed the record underneath us, re-fetch and retry.
+        var lastError: Error?
+        for _ in 0..<3 {
+            // The feed record must exist to be a share root — create a minimal
+            // one if a publish hasn't happened yet.
+            let feedRecord: CKRecord
+            if let existing = try? await privateDB.record(for: feedID) {
+                feedRecord = existing
+            } else {
+                let placeholder = CKRecord(recordType: "Feed", recordID: feedID)
+                placeholder["payload"] = String(
+                    data: try JSONEncoder().encode(FeedBuilder.buildFeed(from: [])),
+                    encoding: .utf8
+                )
+                try await save([placeholder], to: privateDB)
+                continue
+            }
+
+            // Reuse the existing root-record share if there is one.
+            if let shareRef = feedRecord.share,
+               let existingShare = try? await privateDB.record(for: shareRef.recordID) as? CKShare {
+                existingShare[CKShare.SystemFieldKey.title] = title
+                try? await save([existingShare], to: privateDB)
+                return (existingShare, container)
+            }
+
+            let share = CKShare(rootRecord: feedRecord)
+            share.publicPermission = .none  // invited people only — no open link
+            share[CKShare.SystemFieldKey.title] = title
+            do {
+                let results = try await privateDB.modifyRecords(
+                    saving: [feedRecord, share],
+                    deleting: [],
+                    savePolicy: .changedKeys
+                )
+                for (_, result) in results.saveResults {
+                    if case .failure(let error) = result { throw error }
+                }
+                let refreshed = (try? await privateDB.record(for: share.recordID) as? CKShare) ?? share
+                return (refreshed, container)
+            } catch let error as CKError where error.code == .serverRecordChanged
+                || error.code == .batchRequestFailed || error.code == .partialFailure {
+                lastError = error  // stale root record — loop re-fetches and retries
+            }
         }
-        if let refreshed = try? await privateDB.record(for: share.recordID) as? CKShare {
-            return (refreshed, container)
-        }
-        return (share, container)
+        throw lastError ?? CKError(.batchRequestFailed)
     }
 
     // MARK: - Accepting an invite
