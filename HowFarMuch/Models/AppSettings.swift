@@ -35,6 +35,7 @@ enum AppSettings {
     static let selectedMetricKey = "selectedMetric"
     static let reactionsGivenKey = "reactionsGiven"
     static let cachedOwnerIDKey = "cachedOwnerID"
+    static let deletedLegacyZoneKey = "deletedLegacyZone"
     static let excludedActivitiesKey = "excludedActivities"
 
     /// Workouts shorter than this are hidden when `excludeShortWorkouts` is on.
@@ -163,6 +164,12 @@ enum AppSettings {
     static var cachedOwnerID: String? {
         get { defaults.string(forKey: cachedOwnerIDKey) }
         set { defaults.set(newValue, forKey: cachedOwnerIDKey) }
+    }
+
+    /// Whether the legacy zone-wide-shared "FriendFeed" zone has been cleaned up.
+    static var deletedLegacyZone: Bool {
+        get { defaults.bool(forKey: deletedLegacyZoneKey) }
+        set { defaults.set(newValue, forKey: deletedLegacyZoneKey) }
     }
 
     /// Workout types hidden everywhere in the app (raw HKWorkoutActivityType values).

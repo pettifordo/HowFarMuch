@@ -43,7 +43,13 @@ final class FriendsService {
     }
 
     static let containerID = "iCloud.com.owenpettiford.HowFarMuch"
-    static let zoneName = "FriendFeed"
+    /// Fresh zone for root-record (hierarchical) sharing. The original
+    /// "FriendFeed" zone carried a zone-wide share in earlier builds, and
+    /// CloudKit forbids mixing a zone-wide share with a hierarchical share in
+    /// the same zone ("Chaining supported for hierarchical sharing only"), so
+    /// per-person sharing needs a zone that has never been zone-wide-shared.
+    static let zoneName = "FriendShare"
+    static let legacyZoneName = "FriendFeed"
     private static let feedRecordName = "feed"
 
     private let container = CKContainer(identifier: FriendsService.containerID)
@@ -129,6 +135,13 @@ final class FriendsService {
         for (_, result) in results.saveResults {
             if case .failure(let error) = result { throw error }
         }
+        // Best-effort: remove the legacy zone-wide-shared zone so it doesn't
+        // linger. Runs once; ignored if already gone.
+        if !AppSettings.deletedLegacyZone {
+            let legacyID = CKRecordZone.ID(zoneName: Self.legacyZoneName, ownerName: CKCurrentUserDefaultName)
+            _ = try? await privateDB.modifyRecordZones(saving: [], deleting: [legacyID])
+            AppSettings.deletedLegacyZone = true
+        }
     }
 
     // MARK: - Sharing my feed (per-person, private)
@@ -145,12 +158,6 @@ final class FriendsService {
             ? "How Far/Much workouts"
             : "How Far/Much — \(name)'s workouts"
         let feedID = CKRecord.ID(recordName: Self.feedRecordName, zoneID: zoneID)
-
-        // Remove any legacy zone-wide share from earlier builds to avoid conflicts.
-        let legacyShareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
-        if (try? await privateDB.record(for: legacyShareID)) != nil {
-            _ = try? await privateDB.modifyRecords(saving: [], deleting: [legacyShareID])
-        }
 
         // Re-fetch the root record and attempt the atomic save; if a concurrent
         // publish changed the record underneath us, re-fetch and retry.
