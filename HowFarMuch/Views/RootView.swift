@@ -28,7 +28,12 @@ struct RootView: View {
         }
         .tint(.cyan)
         .sheet(item: $friendsViewModel.sharePresentation) { presentation in
-            InviteSheetView(share: presentation.share, container: presentation.container)
+            CloudSharingView(
+                share: presentation.share,
+                container: presentation.container,
+                onStopped: { Task { await friendsViewModel.refresh() } }
+            )
+            .ignoresSafeArea()
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

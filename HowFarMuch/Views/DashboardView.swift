@@ -237,9 +237,19 @@ struct DashboardView: View {
     @ViewBuilder
     private var activityList: some View {
         if viewModel.isLoading && viewModel.allStats.isEmpty {
-            ProgressView()
-                .controlSize(.large)
-                .padding(.top, 60)
+            VStack(spacing: 14) {
+                ProgressView()
+                    .controlSize(.large)
+                Text("Reading your workouts from Apple Health…")
+                    .font(.system(.subheadline, design: .rounded, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("The first load can take a moment if you have a lot of history.")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.top, 60)
+            .padding(.horizontal, 24)
         } else if let message = viewModel.errorMessage {
             emptyState(
                 symbol: "heart.text.square",

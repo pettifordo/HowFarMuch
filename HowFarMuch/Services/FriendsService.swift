@@ -131,36 +131,60 @@ final class FriendsService {
         }
     }
 
-    // MARK: - Sharing my zone
+    // MARK: - Sharing my feed (per-person, private)
 
-    /// Returns the existing zone-wide share, or creates one, for the invite flow.
+    /// Returns the existing share for my feed record, or creates one. The share
+    /// is **private** (publicPermission = .none) and attached to the single
+    /// "feed" record as its root — so it can be driven by UICloudSharingController,
+    /// which locks each invite to a specific person's iCloud account.
     func fetchOrCreateShare() async throws -> (share: CKShare, container: CKContainer) {
         try await ensureAccount()
         try await ensureZone()
-        let shareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
         let name = AppSettings.displayName
         let title = name.isEmpty
             ? "How Far/Much workouts"
             : "How Far/Much — \(name)'s workouts"
-        if let existing = try? await privateDB.record(for: shareID) as? CKShare {
-            // Keep the title and permission current, then re-fetch so the
-            // record carries the server-generated share URL.
-            existing[CKShare.SystemFieldKey.title] = title
-            existing.publicPermission = .readOnly
-            try await save([existing], to: privateDB)
-            if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
-                return (refreshed, container)
-            }
-            return (existing, container)
+
+        // The feed record must exist to be a share root — publish first if needed.
+        let feedID = CKRecord.ID(recordName: Self.feedRecordName, zoneID: zoneID)
+        let feedRecord: CKRecord
+        if let existing = try? await privateDB.record(for: feedID) {
+            feedRecord = existing
+        } else {
+            feedRecord = CKRecord(recordType: "Feed", recordID: feedID)
+            feedRecord["payload"] = String(
+                data: try JSONEncoder().encode(FeedBuilder.buildFeed(from: [])),
+                encoding: .utf8
+            )
         }
-        let share = CKShare(recordZoneID: zoneID)
-        // Open-by-link and read-only: the URL is the invitation, and friends can
-        // only view — so the system share sheet says "can view", not "can make
-        // changes". Reactions ride out in each person's own feed.
-        share.publicPermission = .readOnly
+
+        // Reuse the existing root-record share if there is one.
+        if let shareRef = feedRecord.share,
+           let existingShare = try? await privateDB.record(for: shareRef.recordID) as? CKShare {
+            existingShare[CKShare.SystemFieldKey.title] = title
+            try? await save([existingShare], to: privateDB)
+            return (existingShare, container)
+        }
+
+        // Remove any legacy zone-wide share from earlier builds to avoid conflicts.
+        let legacyShareID = CKRecord.ID(recordName: CKRecordNameZoneWideShare, zoneID: zoneID)
+        if (try? await privateDB.record(for: legacyShareID)) != nil {
+            _ = try? await privateDB.modifyRecords(saving: [], deleting: [legacyShareID])
+        }
+
+        let share = CKShare(rootRecord: feedRecord)
+        share.publicPermission = .none  // invited people only — no open link
         share[CKShare.SystemFieldKey.title] = title
-        try await save([share], to: privateDB)
-        if let refreshed = try? await privateDB.record(for: shareID) as? CKShare {
+        // Root record and its share must be saved together.
+        let results = try await privateDB.modifyRecords(
+            saving: [feedRecord, share],
+            deleting: [],
+            savePolicy: .changedKeys
+        )
+        for (_, result) in results.saveResults {
+            if case .failure(let error) = result { throw error }
+        }
+        if let refreshed = try? await privateDB.record(for: share.recordID) as? CKShare {
             return (refreshed, container)
         }
         return (share, container)
@@ -174,24 +198,25 @@ final class FriendsService {
 
     // MARK: - Reading friends' feeds
 
-    /// Returns friends with published feeds, plus how many accepted shares are
-    /// still waiting for their owner to open the app and publish.
+    /// Returns friends whose feeds I can read. With root-record sharing the
+    /// feed record always exists when a share exists, so there's no separate
+    /// "awaiting" state (kept at 0 for the callers).
     func fetchFriends() async throws -> (friends: [Friend], awaitingFeeds: Int) {
         try await ensureAccount()
         let zones = try await sharedDB.allRecordZones()
         var friends: [Friend] = []
-        var awaiting = 0
-        for zone in zones where zone.zoneID.zoneName == Self.zoneName {
+        // Every shared zone in our container is a friend's feed — fetch the
+        // "feed" record from each, whatever the zone is named.
+        for zone in zones {
             let recordID = CKRecord.ID(recordName: Self.feedRecordName, zoneID: zone.zoneID)
             guard let record = try? await sharedDB.record(for: recordID),
                   let payload = record["payload"] as? String,
                   let feed = try? JSONDecoder().decode(FriendFeed.self, from: Data(payload.utf8)) else {
-                awaiting += 1
                 continue
             }
             friends.append(Friend(zoneID: zone.zoneID, feed: feed))
         }
-        return (friends.sorted { $0.feed.name < $1.feed.name }, awaiting)
+        return (friends.sorted { $0.feed.name < $1.feed.name }, 0)
     }
 
     // MARK: - Giving Respect / Whoops
