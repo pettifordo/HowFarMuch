@@ -36,6 +36,17 @@ final class FriendsViewModel {
     private let service = SupabaseFriendsService()
     private let healthKit = HealthKitService()
 
+    /// Turn backend errors into something a user can act on — notably the
+    /// clock-skew case, which otherwise surfaces as a cryptic JWT error.
+    static func message(for error: Error) -> String {
+        let text = "\(error)".lowercased()
+        if text.contains("issued at future") || text.contains("issued in the future")
+            || (text.contains("jwt") && text.contains("future")) {
+            return "Your device clock looks ahead of real time, so sign-in was rejected. Turn on Settings → General → Date & Time → Set Automatically, then reopen the app."
+        }
+        return error.localizedDescription
+    }
+
     // MARK: - Load
 
     func refresh() async {
@@ -72,7 +83,7 @@ final class FriendsViewModel {
             receivedReactions = try await service.receivedReactions(nameByID: names)
             statusMessage = nil
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
         }
     }
 
@@ -100,7 +111,7 @@ final class FriendsViewModel {
             )
             await refresh()
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
         }
     }
 
@@ -118,7 +129,7 @@ final class FriendsViewModel {
                 searchStatus = "No one found with @\(handle). Check the handle and that they've opted in."
             }
         } catch {
-            searchStatus = error.localizedDescription
+            searchStatus = Self.message(for: error)
         }
     }
 
@@ -129,7 +140,7 @@ final class FriendsViewModel {
             searchResult = nil
             await refresh()
         } catch {
-            searchStatus = error.localizedDescription
+            searchStatus = Self.message(for: error)
         }
     }
 
@@ -138,7 +149,7 @@ final class FriendsViewModel {
             try await service.acceptRequest(friendshipID: request.friendshipID)
             await refresh()
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
         }
     }
 
@@ -147,7 +158,7 @@ final class FriendsViewModel {
             try await service.deleteFriendship(friendshipID: request.friendshipID)
             await refresh()
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
         }
     }
 
@@ -157,7 +168,7 @@ final class FriendsViewModel {
             try await service.deleteFriendshipWith(userID: friend.id)
             await refresh()
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
         }
     }
 
@@ -168,7 +179,7 @@ final class FriendsViewModel {
         do {
             try await service.sendReaction(kind, to: friend.id, period: period)
         } catch {
-            statusMessage = error.localizedDescription
+            statusMessage = Self.message(for: error)
             lastSentReaction[friend.id.uuidString] = nil
             return
         }
