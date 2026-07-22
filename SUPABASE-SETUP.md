@@ -18,26 +18,22 @@ hiding the anon key). I'll then add the SDK and build the client.
 3. Confirm no errors. Under **Table Editor** you should see `profiles`,
    `summaries`, `friendships`, `reactions`.
 
-## 3. Configure Sign in with Apple
+## 3. Configure Sign in with Apple (native — the simple path)
 
-In the **Apple Developer** portal (developer.apple.com):
-1. **Certificates, Identifiers & Profiles → Identifiers**: your app id
-   `com.owenpettiford.HowFarMuch` should have **Sign in with Apple** capability
-   enabled (add it if not).
-2. Create a **Services ID** (e.g. `com.owenpettiford.HowFarMuch.signin`),
-   enable Sign in with Apple, and set the return URL to your Supabase callback:
-   `https://<your-project-ref>.supabase.co/auth/v1/callback`.
-3. **Keys**: create a new **Sign in with Apple** key; download the `.p8`; note
-   the **Key ID** and your **Team ID**.
+Because the app uses **native** Sign in with Apple (`ASAuthorizationController`
+in-app, token handed straight to Supabase's `signInWithIdToken`), you do NOT
+need a Services ID, key, or web callback. Just:
 
 In **Supabase** → **Authentication → Providers → Apple**:
-1. Enable Apple.
-2. Fill in: Services ID (client id), Team ID, Key ID, and the `.p8` key contents.
-3. Save.
+1. Toggle **Apple** on.
+2. In **Authorized Client IDs**, add the app's bundle id:
+   `com.owenpettiford.HowFarMuch`
+3. Leave Services ID / Secret Key blank (those are only for web OAuth). Save.
 
-(Native Sign in with Apple on-device also works via the app's own bundle id;
-we'll use `ASAuthorizationController` in-app and pass the identity token to
-Supabase — the Services ID above covers the web callback Supabase needs.)
+The app target's **Sign in with Apple** capability I'll add in `project.yml`.
+Your App ID in the Apple Developer portal needs Sign in with Apple enabled —
+automatic signing usually handles this on first build; if it complains, tick it
+under Identifiers → your app id → Sign in with Apple.
 
 ## 4. Get the client credentials
 
