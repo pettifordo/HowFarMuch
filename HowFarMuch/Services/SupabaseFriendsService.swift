@@ -9,7 +9,7 @@ struct SupabaseFriendsService {
 
     // MARK: - Row types (snake_case columns)
 
-    struct ProfileRow: Codable {
+    struct ProfileRow: Decodable {
         let id: UUID
         let handle: String
         let displayName: String
@@ -20,6 +20,18 @@ struct SupabaseFriendsService {
             case id, handle, emoji
             case displayName = "display_name"
             case sharingEnabled = "sharing_enabled"
+        }
+
+        // The handle-search RPC returns only id/handle/name/emoji (no
+        // sharing_enabled — those results are opted-in by definition), so
+        // default it rather than failing to decode.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            id = try c.decode(UUID.self, forKey: .id)
+            handle = try c.decode(String.self, forKey: .handle)
+            displayName = try c.decode(String.self, forKey: .displayName)
+            emoji = try c.decode(String.self, forKey: .emoji)
+            sharingEnabled = try c.decodeIfPresent(Bool.self, forKey: .sharingEnabled) ?? true
         }
     }
 

@@ -132,7 +132,13 @@ final class FriendsViewModel {
         guard !handle.isEmpty else { return }
         do {
             if let profile = try await service.findByHandle(handle) {
-                searchResult = profile
+                if profile.id == SupabaseManager.shared.currentUserID {
+                    searchStatus = "That's you! 🙂 Search a friend's handle instead."
+                } else if friends.contains(where: { $0.id == profile.id }) {
+                    searchStatus = "You're already friends with @\(profile.handle)."
+                } else {
+                    searchResult = profile
+                }
             } else {
                 searchStatus = "No one found with @\(handle). Check the handle and that they've opted in."
             }
