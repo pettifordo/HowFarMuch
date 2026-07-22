@@ -119,7 +119,13 @@ final class FriendsViewModel {
             )
             await refresh()
         } catch {
-            statusMessage = Self.message(for: error)
+            let text = "\(error)".lowercased()
+            if text.contains("duplicate") || text.contains("23505") {
+                statusMessage = "That handle was just taken — try another."
+                handleAvailable = false
+            } else {
+                statusMessage = Self.message(for: error)
+            }
         }
     }
 
@@ -232,6 +238,13 @@ final class FriendsViewModel {
         friends = []
         incoming = []
         receivedReactions = []
+        myHandle = nil
+        handleDraft = ""
+        handleAvailable = nil
+        searchResult = nil
+        searchStatus = nil
+        statusMessage = nil
+        outgoingCount = 0
         state = .signedOut
     }
 }
