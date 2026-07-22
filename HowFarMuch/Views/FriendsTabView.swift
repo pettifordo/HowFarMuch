@@ -6,7 +6,7 @@ struct FriendsTabView: View {
     @Bindable var viewModel: SummaryViewModel
     @Bindable var friendsViewModel: FriendsViewModel
 
-    @State private var controlsExpanded = false
+    @State private var controlsExpanded = true
     @State private var confirmHandle = false
 
     private let lime = Color(red: 0.6, green: 0.95, blue: 0.3)
