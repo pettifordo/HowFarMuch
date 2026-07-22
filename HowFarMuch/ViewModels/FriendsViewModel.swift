@@ -12,6 +12,7 @@ final class FriendsViewModel {
 
     var state: State = .signedOut
     var myHandle: String?
+    var sharingEnabled = true
     var friends: [Friend] = []
     /// My own feed, for comparing myself against friends per period.
     var myFeed: FriendFeed?
@@ -62,10 +63,11 @@ final class FriendsViewModel {
                 state = .needsHandle
                 return
             }
-            // Keep local display name/emoji in step with the profile.
-            AppSettings.displayName = profile.displayName
-            AppSettings.displayEmoji = profile.emoji
+            // For now the handle is the identity — friends see it as the name.
             myHandle = profile.handle
+            sharingEnabled = profile.sharingEnabled
+            AppSettings.myHandle = profile.handle
+            AppSettings.displayName = profile.handle
             state = .ready
 
             // Build my feed for comparison; publish it if sharing is on. If
@@ -112,9 +114,9 @@ final class FriendsViewModel {
         let handle = handleDraft.lowercased()
         guard handle.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) != nil else { return }
         do {
-            let name = AppSettings.displayName.isEmpty ? String(handle) : AppSettings.displayName
+            // Name = handle for now (identity is the handle).
             try await service.saveProfile(
-                handle: handle, displayName: name,
+                handle: handle, displayName: handle,
                 emoji: AppSettings.displayEmoji, sharingEnabled: true
             )
             await refresh()
@@ -223,15 +225,37 @@ final class FriendsViewModel {
         }
     }
 
-    /// Called when Settings closes: push any name/emoji edits to the profile.
-    func pushProfileEdits() async {
-        guard state == .ready else { return }
-        try? await service.updateProfileDetails(
-            name: AppSettings.displayName, emoji: AppSettings.displayEmoji
-        )
+    // MARK: - Sharing control
+
+    /// Pause sharing (hide your totals from everyone) or resume it.
+    func setSharing(_ enabled: Bool) async {
+        do {
+            try await service.setSharingEnabled(enabled)
+            if enabled {
+                if let feed = myFeed { try await service.publishSummary(feed) }
+            } else {
+                // Remove the published summary so friends stop seeing your totals.
+                try await service.deleteMySummary()
+            }
+            sharingEnabled = enabled
+            await refresh()
+        } catch {
+            statusMessage = Self.message(for: error)
+        }
     }
 
     // MARK: - Account
+
+    /// Delete the account and all its data (profile, summary, friendships,
+    /// reactions) via a server-side function, then sign out.
+    func deleteAccount() async {
+        do {
+            try await service.deleteAccount()
+            await signOut()
+        } catch {
+            statusMessage = Self.message(for: error)
+        }
+    }
 
     func signOut() async {
         await SupabaseManager.shared.signOut()

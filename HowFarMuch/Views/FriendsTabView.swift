@@ -8,6 +8,8 @@ struct FriendsTabView: View {
 
     @State private var controlsExpanded = true
     @State private var confirmHandle = false
+    @State private var confirmDelete = false
+    @FocusState private var keyboardActive: Bool
 
     private let lime = Color(red: 0.6, green: 0.95, blue: 0.3)
 
@@ -26,9 +28,16 @@ struct FriendsTabView: View {
                     .padding()
                     .padding(.bottom, 32)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .refreshable { await friendsViewModel.refresh() }
             }
             .toolbar(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { keyboardActive = false }
+                }
+            }
         }
     }
 
@@ -70,6 +79,7 @@ struct FriendsTabView: View {
                 TextField("yourhandle", text: $friendsViewModel.handleDraft)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                    .focused($keyboardActive)
                     .onChange(of: friendsViewModel.handleDraft) { _, _ in
                         Task { await friendsViewModel.checkHandle() }
                     }
@@ -130,13 +140,37 @@ struct FriendsTabView: View {
                     if let handle = friendsViewModel.myHandle {
                         Section("Signed in as @\(handle)") {}
                     }
-                    Button(role: .destructive) {
+                    Button {
+                        Task { await friendsViewModel.setSharing(!friendsViewModel.sharingEnabled) }
+                    } label: {
+                        Label(friendsViewModel.sharingEnabled ? "Pause sharing" : "Resume sharing",
+                              systemImage: friendsViewModel.sharingEnabled ? "pause.circle" : "play.circle")
+                    }
+                    Button {
                         Task { await friendsViewModel.signOut() }
                     } label: { Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right") }
+                    Divider()
+                    Button(role: .destructive) {
+                        confirmDelete = true
+                    } label: { Label("Delete account & data", systemImage: "trash") }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.title3).foregroundStyle(.secondary)
                 }
+            }
+            .alert("Delete your account?", isPresented: $confirmDelete) {
+                Button("Delete everything", role: .destructive) {
+                    Task { await friendsViewModel.deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes your handle, your shared totals, your friendships and reactions. Your workouts in Apple Health are not affected. This can't be undone.")
+            }
+
+            if !friendsViewModel.sharingEnabled {
+                Label("Sharing is paused — friends can't see your totals.", systemImage: "pause.circle.fill")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(.orange)
             }
 
             CompactControlsView(viewModel: viewModel, expanded: $controlsExpanded)
@@ -191,7 +225,9 @@ struct FriendsTabView: View {
             TextField("Find a friend by handle", text: $friendsViewModel.searchQuery)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .onSubmit { Task { await friendsViewModel.search() } }
+                .focused($keyboardActive)
+                .submitLabel(.search)
+                .onSubmit { keyboardActive = false; Task { await friendsViewModel.search() } }
             Button {
                 Task { await friendsViewModel.search() }
             } label: { Image(systemName: "magnifyingglass").foregroundStyle(.cyan) }

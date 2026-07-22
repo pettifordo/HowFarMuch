@@ -166,12 +166,17 @@ struct SupabaseFriendsService {
             .eq("id", value: uid.uuidString).execute()
     }
 
-    /// Push name/emoji edits (from Settings) to the profile so friends see them.
-    func updateProfileDetails(name: String, emoji: String) async throws {
+    /// Remove my published summary (used when pausing sharing).
+    func deleteMySummary() async throws {
         guard let uid = SupabaseManager.shared.currentUserID else { return }
-        try await client.from("profiles")
-            .update(["display_name": name, "emoji": emoji])
-            .eq("id", value: uid.uuidString).execute()
+        try await client.from("summaries").delete().eq("user_id", value: uid.uuidString).execute()
+    }
+
+    /// Delete my account and all data via a server-side SECURITY DEFINER
+    /// function that removes the auth user (cascading to profile/summary/
+    /// friendships/reactions).
+    func deleteAccount() async throws {
+        try await client.rpc("delete_own_account").execute()
     }
 
     // MARK: - Publishing my summary

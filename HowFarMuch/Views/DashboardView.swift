@@ -42,7 +42,6 @@ struct DashboardView: View {
         .sheet(isPresented: $showSettings, onDismiss: {
             Task {
                 await viewModel.load()
-                await friendsViewModel.pushProfileEdits()
                 await friendsViewModel.refresh()
             }
         }) {

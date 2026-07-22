@@ -31,6 +31,7 @@ enum AppSettings {
     static let shareHeartRateKey = "shareHeartRate"
     static let displayNameKey = "displayName"
     static let displayEmojiKey = "displayEmoji"
+    static let myHandleKey = "myHandle"
     static let selectedPeriodKey = "selectedPeriod"
     static let selectedMetricKey = "selectedMetric"
     static let excludedActivitiesKey = "excludedActivities"
@@ -138,6 +139,12 @@ enum AppSettings {
             return stored.isEmpty ? "🏃" : stored
         }
         set { defaults.set(newValue, forKey: displayEmojiKey) }
+    }
+
+    /// Cached copy of the user's Friends handle, for display in Settings.
+    static var myHandle: String {
+        get { defaults.string(forKey: myHandleKey) ?? "" }
+        set { defaults.set(newValue, forKey: myHandleKey) }
     }
 
 

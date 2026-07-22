@@ -93,6 +93,12 @@ returns boolean as $$
   select not exists (select 1 from profiles where handle = p_handle);
 $$ language sql stable security definer;
 
+-- In-app account deletion (Apple requirement): removes the caller's auth user,
+-- cascading to their profile, summary, friendships and reactions.
+create or replace function delete_own_account() returns void as $$
+  delete from auth.users where id = auth.uid();
+$$ language sql security definer;
+
 -- ---------------------------------------------------------------------------
 -- Row-Level Security
 -- ---------------------------------------------------------------------------

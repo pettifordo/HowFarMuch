@@ -20,8 +20,6 @@ struct SettingsView: View {
     @AppStorage(AppSettings.compactValuesKey) private var compactValues = false
     @AppStorage(AppSettings.shareTodayKey) private var shareToday = true
     @AppStorage(AppSettings.shareHeartRateKey) private var shareHeartRate = false
-    @AppStorage(AppSettings.displayNameKey) private var displayName = ""
-    @AppStorage(AppSettings.displayEmojiKey) private var displayEmoji = ""
     @State private var excluded = AppSettings.excludedActivityIDs
     @State private var showDuplicateList = false
 
@@ -217,29 +215,15 @@ struct SettingsView: View {
     @ViewBuilder
     private var sharingContent: some View {
         HStack {
-            Text("Your name")
+            Text("Your handle")
                 .font(.system(.body, design: .rounded, weight: .medium))
+                .foregroundStyle(.secondary)
             Spacer()
-            TextField("Me", text: $displayName)
-                .multilineTextAlignment(.trailing)
-                .textFieldStyle(.plain)
-                .frame(maxWidth: 160)
+            Text(AppSettings.myHandle.isEmpty ? "not set" : "@\(AppSettings.myHandle)")
+                .font(.system(.body, design: .rounded, weight: .semibold))
+                .foregroundStyle(.secondary)
         }
-        Divider().overlay(.white.opacity(0.1))
-        HStack {
-            Text("Your emoji")
-                .font(.system(.body, design: .rounded, weight: .medium))
-            Spacer()
-            TextField("🏃", text: $displayEmoji)
-                .multilineTextAlignment(.trailing)
-                .textFieldStyle(.plain)
-                .frame(maxWidth: 60)
-                .onChange(of: displayEmoji) { _, newValue in
-                    if newValue.count > 2 {
-                        displayEmoji = String(newValue.suffix(2))
-                    }
-                }
-        }
+        caption("Your handle is how friends find you. It's set when you join Friends and can't be changed for now.")
         Divider().overlay(.white.opacity(0.1))
         Toggle("Share today's totals", isOn: $shareToday)
             .font(.system(.body, design: .rounded, weight: .medium))
@@ -248,7 +232,7 @@ struct SettingsView: View {
         Toggle("Share average heart rate", isOn: $shareHeartRate)
             .font(.system(.body, design: .rounded, weight: .medium))
             .tint(.cyan)
-        caption("Friends only ever see totals — never individual workouts, times or routes. Excluded workout types stay hidden from friends too.")
+        caption("Friends only ever see totals — never individual workouts, times or routes. Excluded workout types stay hidden from friends too. Pause or delete sharing from the ••• menu on the Friends tab.")
     }
 
     // MARK: - Help & about
