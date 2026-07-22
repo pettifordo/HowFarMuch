@@ -38,6 +38,14 @@ final class FriendsViewModel {
     private let service = SupabaseFriendsService()
     private let healthKit = HealthKitService()
 
+    /// A cancelled task (e.g. pull-to-refresh superseded by a view update) is
+    /// not a real error and shouldn't be shown.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return "\(error)".lowercased().contains("cancell")
+    }
+
     /// Turn backend errors into something a user can act on — notably the
     /// clock-skew case, which otherwise surfaces as a cryptic JWT error.
     static func message(for error: Error) -> String {
@@ -93,7 +101,7 @@ final class FriendsViewModel {
             receivedReactions = try await service.receivedReactions(nameByID: names)
             statusMessage = nil
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
@@ -126,7 +134,7 @@ final class FriendsViewModel {
                 statusMessage = "That handle was just taken — try another."
                 handleAvailable = false
             } else {
-                statusMessage = Self.message(for: error)
+                if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
             }
         }
     }
@@ -151,7 +159,7 @@ final class FriendsViewModel {
                 searchStatus = "No one found with @\(handle). Check the handle and that they've opted in."
             }
         } catch {
-            searchStatus = Self.message(for: error)
+            if !Self.isCancellation(error) { searchStatus = Self.message(for: error) }
         }
     }
 
@@ -175,7 +183,7 @@ final class FriendsViewModel {
                 searchStatus = "You've already sent @\(profile.handle) a request."
                 searchResult = nil
             } else {
-                searchStatus = Self.message(for: error)
+                if !Self.isCancellation(error) { searchStatus = Self.message(for: error) }
             }
         }
     }
@@ -185,7 +193,7 @@ final class FriendsViewModel {
             try await service.acceptRequest(friendshipID: request.friendshipID)
             await refresh()
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
@@ -194,7 +202,7 @@ final class FriendsViewModel {
             try await service.deleteFriendship(friendshipID: request.friendshipID)
             await refresh()
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
@@ -204,7 +212,7 @@ final class FriendsViewModel {
             try await service.deleteFriendshipWith(userID: friend.id)
             await refresh()
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
@@ -215,7 +223,7 @@ final class FriendsViewModel {
         do {
             try await service.sendReaction(kind, to: friend.id, period: period)
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
             lastSentReaction[friend.id.uuidString] = nil
             return
         }
@@ -240,7 +248,7 @@ final class FriendsViewModel {
             sharingEnabled = enabled
             await refresh()
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
@@ -253,7 +261,7 @@ final class FriendsViewModel {
             try await service.deleteAccount()
             await signOut()
         } catch {
-            statusMessage = Self.message(for: error)
+            if !Self.isCancellation(error) { statusMessage = Self.message(for: error) }
         }
     }
 
