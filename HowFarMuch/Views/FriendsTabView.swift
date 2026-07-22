@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// The "Friends" tab: received reactions, and a card per friend showing a
-/// head-to-head comparison of you vs them for the selected metric & period.
+/// The "Friends" tab. Three states: signed out (Sign in with Apple), needs a
+/// handle (claim one), or ready (search, requests, friend comparison cards).
 struct FriendsTabView: View {
     @Bindable var viewModel: SummaryViewModel
     @Bindable var friendsViewModel: FriendsViewModel
+
+    private let lime = Color(red: 0.6, green: 0.95, blue: 0.3)
 
     var body: some View {
         NavigationStack {
@@ -12,38 +14,10 @@ struct FriendsTabView: View {
                 AppBackground()
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        header
-                        periodMetricNote
-                        if !friendsViewModel.receivedReactions.isEmpty {
-                            reactionsStrip
-                        }
-                        if let message = friendsViewModel.statusMessage {
-                            Text(message)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.orange)
-                        }
-                        if friendsViewModel.awaitingFeeds > 0 {
-                            awaitingNote
-                        }
-                        if friendsViewModel.friends.isEmpty {
-                            emptyState
-                        }
-                        ForEach(friendsViewModel.friends) { friend in
-                            NavigationLink {
-                                FriendDetailView(
-                                    friend: friend,
-                                    initialPeriod: viewModel.period,
-                                    friendsViewModel: friendsViewModel
-                                )
-                            } label: {
-                                FriendComparisonCard(
-                                    friend: friend,
-                                    period: viewModel.period,
-                                    metric: viewModel.metric,
-                                    myValue: viewModel.myValue(for: viewModel.metric)
-                                )
-                            }
-                            .buttonStyle(.plain)
+                        switch friendsViewModel.state {
+                        case .signedOut: signedOut
+                        case .needsHandle: handleClaim
+                        case .ready: ready
                         }
                     }
                     .padding()
@@ -55,34 +29,199 @@ struct FriendsTabView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text("Friends")
+    // MARK: - Signed out
+
+    private var signedOut: some View {
+        VStack(spacing: 16) {
+            LogoMarkView().frame(width: 60, height: 60).padding(.top, 40)
+            Text("Follow your friends")
                 .font(.system(.title, design: .rounded, weight: .heavy))
-            if friendsViewModel.isDemo {
-                Text("demo")
-                    .font(.system(.caption2, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.yellow.opacity(0.9))
+            Text("Sign in to pick a handle, then swap workout totals with friends and trade Respect 🤜 and Whoops 🙈. You only ever share summary totals — never individual workouts, dates or routes.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            AppleSignInButton(
+                onSignedIn: { Task { await friendsViewModel.refresh() } },
+                onError: { friendsViewModel.statusMessage = $0 }
+            )
+            .padding(.horizontal, 24)
+            .padding(.top, 8)
+            if let message = friendsViewModel.statusMessage {
+                Text(message).font(.system(.caption, design: .rounded)).foregroundStyle(.orange)
             }
-            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Handle claim
+
+    private var handleClaim: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Pick your handle")
+                .font(.system(.title2, design: .rounded, weight: .heavy))
+            Text("This is how friends find you. Lowercase letters, numbers and underscores, 3–20 characters.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(.secondary)
+            HStack {
+                Text("@").foregroundStyle(.secondary)
+                TextField("yourhandle", text: $friendsViewModel.handleDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .onChange(of: friendsViewModel.handleDraft) { _, _ in
+                        Task { await friendsViewModel.checkHandle() }
+                    }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.08)))
+
+            if friendsViewModel.checkingHandle {
+                Label("Checking…", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
+            } else if let available = friendsViewModel.handleAvailable {
+                Label(available ? "Available" : "Not available",
+                      systemImage: available ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.system(.caption, design: .rounded, weight: .semibold))
+                    .foregroundStyle(available ? .green : .orange)
+            }
+
             Button {
-                Task { await friendsViewModel.invite() }
+                Task { await friendsViewModel.claimHandle() }
             } label: {
-                Label("Invite", systemImage: "person.badge.plus")
-                    .font(.system(.subheadline, design: .rounded, weight: .semibold))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(.cyan.opacity(0.18)))
-                    .foregroundStyle(.cyan)
+                Text("Claim handle")
+                    .font(.system(.headline, design: .rounded))
+                    .frame(maxWidth: .infinity).padding(.vertical, 14)
+                    .background(Capsule().fill(friendsViewModel.handleAvailable == true
+                        ? AnyShapeStyle(LinearGradient(colors: [.cyan, lime], startPoint: .leading, endPoint: .trailing))
+                        : AnyShapeStyle(.white.opacity(0.1))))
+                    .foregroundStyle(friendsViewModel.handleAvailable == true ? .black : .secondary)
             }
             .buttonStyle(.plain)
+            .disabled(friendsViewModel.handleAvailable != true)
+
+            if let message = friendsViewModel.statusMessage {
+                Text(message).font(.system(.caption, design: .rounded)).foregroundStyle(.orange)
+            }
         }
     }
 
-    private var periodMetricNote: some View {
-        Text("Comparing \(viewModel.metric.rawValue.lowercased()) \(viewModel.period.phrase). Change these on the Me tab.")
-            .font(.system(.caption, design: .rounded))
-            .foregroundStyle(.secondary)
+    // MARK: - Ready
+
+    private var ready: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Friends").font(.system(.title, design: .rounded, weight: .heavy))
+                Spacer()
+                Menu {
+                    Button(role: .destructive) {
+                        Task { await friendsViewModel.signOut() }
+                    } label: { Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right") }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3).foregroundStyle(.secondary)
+                }
+            }
+            Text("Comparing \(viewModel.metric.rawValue.lowercased()) \(viewModel.period.phrase). Change these on the Me tab.")
+                .font(.system(.caption, design: .rounded)).foregroundStyle(.secondary)
+
+            searchBar
+            if let status = friendsViewModel.searchStatus {
+                Text(status).font(.system(.caption, design: .rounded)).foregroundStyle(.cyan)
+            }
+            if let result = friendsViewModel.searchResult {
+                searchResultCard(result)
+            }
+
+            if !friendsViewModel.incoming.isEmpty {
+                Text("Requests").font(.system(.headline, design: .rounded)).padding(.top, 4)
+                ForEach(friendsViewModel.incoming) { request in
+                    requestCard(request)
+                }
+            }
+
+            if !friendsViewModel.receivedReactions.isEmpty {
+                reactionsStrip
+            }
+
+            if let message = friendsViewModel.statusMessage {
+                Text(message).font(.system(.caption, design: .rounded)).foregroundStyle(.orange)
+            }
+
+            if friendsViewModel.friends.isEmpty && friendsViewModel.incoming.isEmpty {
+                Text("No friends yet — search a handle above to send your first request.")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 8)
+            }
+
+            ForEach(friendsViewModel.friends) { friend in
+                NavigationLink {
+                    FriendDetailView(friend: friend, initialPeriod: viewModel.period,
+                                     friendsViewModel: friendsViewModel)
+                } label: {
+                    FriendComparisonCard(friend: friend, period: viewModel.period,
+                                         metric: viewModel.metric,
+                                         myValue: viewModel.myValue(for: viewModel.metric))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "at").foregroundStyle(.secondary)
+            TextField("Find a friend by handle", text: $friendsViewModel.searchQuery)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .onSubmit { Task { await friendsViewModel.search() } }
+            Button {
+                Task { await friendsViewModel.search() }
+            } label: { Image(systemName: "magnifyingglass").foregroundStyle(.cyan) }
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.08)))
+    }
+
+    private func searchResultCard(_ profile: SupabaseFriendsService.ProfileRow) -> some View {
+        HStack(spacing: 12) {
+            Text(profile.emoji).font(.title2)
+                .frame(width: 40, height: 40).background(Circle().fill(.white.opacity(0.08)))
+            VStack(alignment: .leading) {
+                Text(profile.displayName).font(.system(.headline, design: .rounded))
+                Text("@\(profile.handle)").font(.system(.caption, design: .rounded)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                Task { await friendsViewModel.sendRequest(to: profile) }
+            } label: {
+                Text("Add").font(.system(.subheadline, design: .rounded, weight: .bold))
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Capsule().fill(.cyan.opacity(0.2))).foregroundStyle(.cyan)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.06)))
+    }
+
+    private func requestCard(_ request: SupabaseFriendsService.IncomingRequest) -> some View {
+        HStack(spacing: 12) {
+            Text(request.profile.emoji).font(.title2)
+                .frame(width: 40, height: 40).background(Circle().fill(.white.opacity(0.08)))
+            VStack(alignment: .leading) {
+                Text(request.profile.displayName).font(.system(.headline, design: .rounded))
+                Text("@\(request.profile.handle) wants to compare")
+                    .font(.system(.caption, design: .rounded)).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button { Task { await friendsViewModel.accept(request) } } label: {
+                Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(.green)
+            }.buttonStyle(.plain)
+            Button { Task { await friendsViewModel.decline(request) } } label: {
+                Image(systemName: "xmark.circle.fill").font(.title2).foregroundStyle(.secondary)
+            }.buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(.cyan.opacity(0.08)))
     }
 
     private var reactionsStrip: some View {
@@ -93,66 +232,20 @@ struct FriendsTabView: View {
                     Text("\(reaction.fromName) sent \(reaction.kind.label)")
                         .font(.system(.caption, design: .rounded, weight: .semibold))
                     Text("· \(reaction.date.formatted(.relative(presentation: .named)))")
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(.secondary)
+                        .font(.system(.caption2, design: .rounded)).foregroundStyle(.secondary)
                     Spacer()
                 }
             }
         }
         .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.white.opacity(0.05))
-        )
-    }
-
-    private var awaitingNote: some View {
-        Label(
-            friendsViewModel.awaitingFeeds == 1
-                ? "Invite accepted — totals appear once your friend opens the app"
-                : "\(friendsViewModel.awaitingFeeds) invites accepted — totals appear once your friends open the app",
-            systemImage: "hourglass"
-        )
-        .font(.system(.caption, design: .rounded, weight: .semibold))
-        .foregroundStyle(.cyan)
-    }
-
-    private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.2.circle.fill")
-                .font(.system(size: 52))
-                .foregroundStyle(.cyan)
-            Text("Follow your friends")
-                .font(.system(.headline, design: .rounded))
-            Text("Send an invite and you'll see each other's totals side by side, and can trade Respect 🤜 and Whoops 🙈. They only ever see your totals — never individual workouts.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button {
-                Task { await friendsViewModel.invite() }
-            } label: {
-                Label("Invite a Friend", systemImage: "person.badge.plus")
-                    .font(.system(.headline, design: .rounded))
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 12)
-                    .background(Capsule().fill(
-                        LinearGradient(colors: [.cyan, Color(red: 0.6, green: 0.95, blue: 0.3)],
-                                       startPoint: .leading, endPoint: .trailing)))
-                    .foregroundStyle(.black)
-            }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 40)
-        .padding(.horizontal, 12)
+        .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.05)))
     }
 }
 
 // MARK: - Head-to-head card
 
 struct FriendComparisonCard: View {
-    let friend: FriendsService.Friend
+    let friend: Friend
     let period: Period
     let metric: Metric
     let myValue: Double
@@ -161,28 +254,20 @@ struct FriendComparisonCard: View {
         guard let bucket = friend.feed.bucket(for: period) else { return 0 }
         return metric.bucketValue(bucket)
     }
-
     private var iLead: Bool { myValue >= theirValue }
     private var maxValue: Double { max(myValue, theirValue, 1) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Text(friend.feed.emoji)
-                    .font(.title2)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white.opacity(0.08)))
-                Text(friend.feed.name)
-                    .font(.system(.headline, design: .rounded))
+                Text(friend.feed.emoji).font(.title2)
+                    .frame(width: 40, height: 40).background(Circle().fill(.white.opacity(0.08)))
+                Text(friend.feed.name).font(.system(.headline, design: .rounded))
                 Spacer()
-                Text(verdict)
-                    .font(.system(.caption, design: .rounded, weight: .bold))
+                Text(verdict).font(.system(.caption, design: .rounded, weight: .bold))
                     .foregroundStyle(verdictColor)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
             }
-
             comparisonBar(label: "You", value: myValue, tint: .cyan, leading: iLead)
             comparisonBar(label: friend.feed.name, value: theirValue,
                           tint: Color(red: 0.6, green: 0.95, blue: 0.3), leading: !iLead && theirValue > 0)
@@ -191,35 +276,26 @@ struct FriendComparisonCard: View {
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(.white.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-                )
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(.white.opacity(0.1), lineWidth: 1))
         )
     }
 
     private func comparisonBar(label: String, value: Double, tint: Color, leading: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(label)
-                    .font(.system(.caption, design: .rounded, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                Text(label).font(.system(.caption, design: .rounded, weight: .semibold)).foregroundStyle(.secondary)
                 if leading {
-                    Image(systemName: "crown.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.yellow)
+                    Image(systemName: "crown.fill").font(.caption2).foregroundStyle(.yellow)
                 }
                 Spacer()
-                Text(metric.formatted(value))
-                    .font(.system(.subheadline, design: .rounded, weight: .bold))
+                Text(metric.formatted(value)).font(.system(.subheadline, design: .rounded, weight: .bold))
                     .foregroundStyle(tint)
             }
             GeometryReader { proxy in
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.08))
-                    Capsule()
-                        .fill(tint)
-                        .frame(width: max(6, proxy.size.width * value / maxValue))
+                    Capsule().fill(tint).frame(width: max(6, proxy.size.width * value / maxValue))
                 }
             }
             .frame(height: 7)
@@ -231,7 +307,6 @@ struct FriendComparisonCard: View {
         if abs(myValue - theirValue) < maxValue * 0.01 { return "level" }
         return iLead ? "you lead" : "behind"
     }
-
     private var verdictColor: Color {
         if theirValue == 0 && myValue == 0 { return .secondary }
         if abs(myValue - theirValue) < maxValue * 0.01 { return .secondary }

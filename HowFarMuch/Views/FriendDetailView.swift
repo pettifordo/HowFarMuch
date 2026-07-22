@@ -2,12 +2,12 @@ import SwiftUI
 
 /// A friend's totals, browsable by period, with Respect/Whoops reactions.
 struct FriendDetailView: View {
-    let friend: FriendsService.Friend
+    let friend: Friend
     @Bindable var friendsViewModel: FriendsViewModel
 
     @State private var period: Period
 
-    init(friend: FriendsService.Friend, initialPeriod: Period, friendsViewModel: FriendsViewModel) {
+    init(friend: Friend, initialPeriod: Period, friendsViewModel: FriendsViewModel) {
         self.friend = friend
         self.friendsViewModel = friendsViewModel
         _period = State(initialValue: initialPeriod)
@@ -51,7 +51,7 @@ struct FriendDetailView: View {
         VStack(spacing: 6) {
             Text(friend.feed.emoji)
                 .font(.system(size: 44))
-            Text("Updated \(friend.feed.updated.formatted(.relative(presentation: .named)))")
+            Text("@\(friend.handle)")
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(.secondary)
         }
@@ -195,7 +195,7 @@ struct FriendDetailView: View {
     private var reactionButtons: some View {
         HStack(spacing: 10) {
             ForEach(ReactionKind.allCases, id: \.self) { kind in
-                let justSent = friendsViewModel.lastSentReaction[friend.id] == kind
+                let justSent = friendsViewModel.lastSentReaction[friend.id.uuidString] == kind
                 Button {
                     Task { await friendsViewModel.sendReaction(kind, about: period, to: friend) }
                 } label: {

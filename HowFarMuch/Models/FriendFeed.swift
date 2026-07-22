@@ -1,50 +1,24 @@
 import Foundation
 import HealthKit
 
-// MARK: - The published feed (one JSON record per person in CloudKit)
+// MARK: - The shared summary (stored as jsonb in Supabase, one row per user)
 
 /// Everything one person shares with their friends. Values are raw numbers so
 /// each viewer's own unit and compact-value settings format the display.
-///
-/// Reactions travel inside the feed: each person carries the reactions *they've
-/// given*, tagged with the recipient's owner id. This means friends only ever
-/// need READ access to each other's zones — nobody writes into anyone else's
-/// data — so the CloudKit share can be read-only ("can view", not "can make
-/// changes").
+/// Summary only — no workout dates, times, routes, or individual sessions.
 struct FriendFeed: Codable {
     var name: String
     var emoji: String
-    var updated: Date
     var buckets: [PeriodBucket]
-    var reactionsGiven: [Reaction]
 
     func bucket(for period: Period) -> PeriodBucket? {
         buckets.first { $0.periodType == period.rawValue }
-    }
-
-    init(name: String, emoji: String, updated: Date, buckets: [PeriodBucket], reactionsGiven: [Reaction] = []) {
-        self.name = name
-        self.emoji = emoji
-        self.updated = updated
-        self.buckets = buckets
-        self.reactionsGiven = reactionsGiven
-    }
-
-    // Tolerate feeds published by older builds that had no reactions field.
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        name = try c.decode(String.self, forKey: .name)
-        emoji = try c.decode(String.self, forKey: .emoji)
-        updated = try c.decode(Date.self, forKey: .updated)
-        buckets = try c.decode([PeriodBucket].self, forKey: .buckets)
-        reactionsGiven = try c.decodeIfPresent([Reaction].self, forKey: .reactionsGiven) ?? []
     }
 }
 
 struct PeriodBucket: Codable {
     /// Matches `Period.rawValue` ("Today", "Week", "Month", "Year", "All").
     var periodType: String
-    var start: Date
     var activities: [ActivityAggregate]
     /// Time-weighted average across the period, if shared.
     var avgHeartRate: Double?
@@ -64,6 +38,17 @@ struct ActivityAggregate: Codable, Identifiable {
 
     var id: UInt { typeRaw }
     var type: HKWorkoutActivityType { HKWorkoutActivityType(rawValue: typeRaw) ?? .other }
+}
+
+// MARK: - A friend (profile id + their shared feed)
+
+struct Friend: Identifiable, Hashable {
+    let id: UUID          // the friend's profile / user id
+    let handle: String
+    let feed: FriendFeed
+
+    static func == (lhs: Friend, rhs: Friend) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 // MARK: - Reactions
@@ -87,25 +72,21 @@ enum ReactionKind: String, Codable, CaseIterable {
     }
 }
 
-struct Reaction: Codable, Identifiable {
-    var id: UUID
-    var kind: ReactionKind
-    /// Which period the reaction was about (Period.rawValue).
-    var periodType: String
-    var fromName: String
-    /// CloudKit owner id of the friend this reaction is *for* — lets a reader
-    /// pick out the reactions aimed at them from a friend's feed.
-    var targetOwnerID: String
-    var date: Date
+/// A reaction shown in the UI (resolved from the reactions table + sender name).
+struct Reaction: Identifiable {
+    let id: UUID
+    let kind: ReactionKind
+    let periodType: String
+    let fromName: String
+    let date: Date
 }
 
 // MARK: - Building the feed from workout records
 
 enum FeedBuilder {
-    /// Aggregates all-time workout records into shareable period buckets,
-    /// honouring the sharing preferences (Today on/off, heart rate on/off).
-    /// `records` should already have settings-page rules applied (exclusions,
-    /// dedupe, short workouts) so friends see what the owner sees.
+    /// Aggregates workout records into shareable period buckets, honouring the
+    /// sharing preferences (Today on/off, heart rate on/off). `records` should
+    /// already have settings-page rules applied (exclusions, dedupe, short).
     static func buildFeed(from records: [WorkoutRecord]) -> FriendFeed {
         var periods: [Period] = [.week, .month, .year, .allTime]
         if AppSettings.shareToday {
@@ -124,7 +105,6 @@ enum FeedBuilder {
             }
             return PeriodBucket(
                 periodType: period.rawValue,
-                start: period.startDate,
                 activities: aggregates,
                 avgHeartRate: AppSettings.shareHeartRate ? averageHeartRate(of: inPeriod) : nil
             )
@@ -133,9 +113,7 @@ enum FeedBuilder {
         return FriendFeed(
             name: name.isEmpty ? "A friend" : name,
             emoji: AppSettings.displayEmoji,
-            updated: .now,
-            buckets: buckets,
-            reactionsGiven: AppSettings.reactionsGiven
+            buckets: buckets
         )
     }
 

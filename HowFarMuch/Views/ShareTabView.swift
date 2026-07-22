@@ -46,13 +46,6 @@ struct ShareTabView: View {
                                 actionRow("Download CSV", subtitle: "Every workout as a spreadsheet", symbol: "tablecells.fill")
                             }
                             .buttonStyle(.plain)
-
-                            Button {
-                                Task { await friendsViewModel.invite() }
-                            } label: {
-                                actionRow("Invite a Friend", subtitle: "Swap totals and trade reactions", symbol: "person.badge.plus.fill")
-                            }
-                            .buttonStyle(.plain)
                         }
 
                         if let message = friendsViewModel.statusMessage {

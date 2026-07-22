@@ -1,159 +1,190 @@
 import Foundation
-import CloudKit
 import Observation
-
-/// Wraps a share for sheet presentation.
-struct SharePresentation: Identifiable {
-    let id = UUID()
-    let share: CKShare
-    let container: CKContainer
-}
 
 @MainActor
 @Observable
 final class FriendsViewModel {
-    var friends: [FriendsService.Friend] = []
-    /// My own published feed, for comparing myself against friends per period.
+    enum State {
+        case signedOut          // needs Sign in with Apple
+        case needsHandle        // signed in, no profile/handle yet
+        case ready              // good to go
+    }
+
+    var state: State = .signedOut
+    var friends: [Friend] = []
+    /// My own feed, for comparing myself against friends per period.
     var myFeed: FriendFeed?
-    /// Accepted shares whose owners haven't published a feed yet.
-    var awaitingFeeds = 0
+    var incoming: [SupabaseFriendsService.IncomingRequest] = []
+    var outgoingCount = 0
     var receivedReactions: [Reaction] = []
     var statusMessage: String?
     var isLoading = false
-    var isDemo = false
-    var sharePresentation: SharePresentation?
+
+    // Handle claim
+    var handleDraft = ""
+    var handleAvailable: Bool?
+    var checkingHandle = false
+
+    // Friend search
+    var searchQuery = ""
+    var searchResult: SupabaseFriendsService.ProfileRow?
+    var searchStatus: String?
+
     /// Reaction just sent per friend id, for button feedback.
     var lastSentReaction: [String: ReactionKind] = [:]
-    /// Asks the user for a display name (before inviting, after accepting,
-    /// or when sharing is active without one).
-    var showNamePrompt = false
-    private var invitePendingName = false
-    /// After accepting an invite: offer to share back so it's mutual.
-    var showShareBackPrompt = false
-    var shareBackName = "your friend"
 
-    private let service = FriendsService()
+    private let service = SupabaseFriendsService()
     private let healthKit = HealthKitService()
-    private var myOwnerID: String?
-    /// Share created/fetched ahead of time so tapping Invite is instant.
-    private var preparedShare: (share: CKShare, container: CKContainer)?
-    private var didPrewarm = false
 
-    /// Publishes my current feed (totals + reactions I've given) to CloudKit,
-    /// and keeps a local copy for comparison.
-    private func publishMyFeed() async throws {
-        let allTime = try await healthKit.fetchWorkouts(from: .distantPast)
-        let filtered = WorkoutFilters.apply(allTime).kept
-        let feed = FeedBuilder.buildFeed(from: filtered)
-        try await service.publish(feed: feed)
-        myFeed = feed
-    }
+    // MARK: - Load
 
     func refresh() async {
-        #if targetEnvironment(simulator)
-        friends = DemoFriends.friends()
-        receivedReactions = DemoFriends.receivedReactions()
-        myFeed = FeedBuilder.buildFeed(from: DemoData.records(in: .allTime))
-        isDemo = true
-        #else
+        guard SupabaseManager.shared.isSignedIn else {
+            state = .signedOut
+            return
+        }
         isLoading = true
         defer { isLoading = false }
         do {
-            if myOwnerID == nil { myOwnerID = try? await service.myOwnerID() }
-            try await publishMyFeed()
-            let result = try await service.fetchFriends()
+            guard let profile = try await service.myProfile() else {
+                state = .needsHandle
+                return
+            }
+            // Keep local display name/emoji in step with the profile.
+            AppSettings.displayName = profile.displayName
+            AppSettings.displayEmoji = profile.emoji
+            state = .ready
+
+            // Build my feed for comparison; publish it if sharing is on.
+            let filtered = WorkoutFilters.apply(
+                try await healthKit.fetchWorkouts(from: .distantPast)
+            ).kept
+            let feed = FeedBuilder.buildFeed(from: filtered)
+            myFeed = feed
+            if profile.sharingEnabled {
+                try await service.publishSummary(feed)
+            }
+            let result = try await service.loadFriends()
             friends = result.friends
-            awaitingFeeds = result.awaitingFeeds
-            // Received reactions are the ones friends aimed at me, pulled from
-            // their feeds.
-            if let mine = myOwnerID {
-                receivedReactions = friends
-                    .flatMap(\.feed.reactionsGiven)
-                    .filter { $0.targetOwnerID == mine }
-                    .sorted { $0.date > $1.date }
-            }
+            incoming = result.incoming
+            outgoingCount = result.outgoingCount
+            let names = Dictionary(uniqueKeysWithValues: friends.map { ($0.id, $0.feed.name) })
+            receivedReactions = try await service.receivedReactions(nameByID: names)
             statusMessage = nil
-            // Actively sharing without a name? Friends would see "A friend".
-            // (Skip while the share-back prompt is up — one dialog at a time;
-            // the invite flow has its own name gate anyway.)
-            if AppSettings.displayName.isEmpty && (!friends.isEmpty || awaitingFeeds > 0)
-                && !showShareBackPrompt {
-                showNamePrompt = true
-            }
-            // Prepare the share once so Invite is instant. Done inline (not a
-            // detached Task) so it can't race the feed publish above and cause
-            // an atomic save failure.
-            if !didPrewarm && !AppSettings.displayName.isEmpty {
-                didPrewarm = true
-                preparedShare = try? await service.fetchOrCreateShare()
-            }
         } catch {
-            statusMessage = FriendsService.friendlyMessage(for: error)
-        }
-        #endif
-    }
-
-    /// Called after the name prompt saves: republish under the new name and
-    /// continue an interrupted invite.
-    func nameSaved() async {
-        await refresh()
-        if invitePendingName {
-            invitePendingName = false
-            await invite()
+            statusMessage = error.localizedDescription
         }
     }
 
-    func invite() async {
-        #if targetEnvironment(simulator)
-        statusMessage = "Inviting friends needs iCloud, which isn't available in the simulator."
-        #else
-        guard !AppSettings.displayName.isEmpty else {
-            invitePendingName = true
-            showNamePrompt = true
+    // MARK: - Handle claim
+
+    func checkHandle() async {
+        let handle = handleDraft.lowercased()
+        guard handle.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) != nil else {
+            handleAvailable = false
             return
         }
-        // Fast path: use the pre-warmed share so the sheet appears immediately.
-        if let prepared = preparedShare {
-            sharePresentation = SharePresentation(share: prepared.share, container: prepared.container)
-            return
-        }
+        checkingHandle = true
+        defer { checkingHandle = false }
+        handleAvailable = try? await service.isHandleAvailable(handle)
+    }
+
+    func claimHandle() async {
+        let handle = handleDraft.lowercased()
+        guard handle.range(of: "^[a-z0-9_]{3,20}$", options: .regularExpression) != nil else { return }
         do {
-            let result = try await service.fetchOrCreateShare()
-            preparedShare = result
-            sharePresentation = SharePresentation(share: result.share, container: result.container)
+            let name = AppSettings.displayName.isEmpty ? String(handle) : AppSettings.displayName
+            try await service.saveProfile(
+                handle: handle, displayName: name,
+                emoji: AppSettings.displayEmoji, sharingEnabled: true
+            )
+            await refresh()
         } catch {
-            statusMessage = FriendsService.friendlyMessage(for: error)
+            statusMessage = error.localizedDescription
         }
-        #endif
     }
 
-    func sendReaction(_ kind: ReactionKind, about period: Period, to friend: FriendsService.Friend) async {
-        lastSentReaction[friend.id] = kind
-        #if !targetEnvironment(simulator)
-        // Record the reaction in my own list (tagged with the friend's owner id)
-        // and republish my feed — the friend reads it from there.
-        var given = AppSettings.reactionsGiven
-        given.append(Reaction(
-            id: UUID(),
-            kind: kind,
-            periodType: period.rawValue,
-            fromName: AppSettings.displayName,
-            targetOwnerID: friend.zoneID.ownerName,
-            date: .now
-        ))
-        AppSettings.reactionsGiven = given
+    // MARK: - Search & invite
+
+    func search() async {
+        let handle = searchQuery.lowercased().replacingOccurrences(of: "@", with: "")
+        searchResult = nil
+        searchStatus = nil
+        guard !handle.isEmpty else { return }
         do {
-            try await publishMyFeed()
+            if let profile = try await service.findByHandle(handle) {
+                searchResult = profile
+            } else {
+                searchStatus = "No one found with @\(handle). Check the handle and that they've opted in."
+            }
         } catch {
-            statusMessage = FriendsService.friendlyMessage(for: error)
-            lastSentReaction[friend.id] = nil
+            searchStatus = error.localizedDescription
+        }
+    }
+
+    func sendRequest(to profile: SupabaseFriendsService.ProfileRow) async {
+        do {
+            try await service.sendRequest(to: profile.id)
+            searchStatus = "Request sent to @\(profile.handle) 🎉"
+            searchResult = nil
+            await refresh()
+        } catch {
+            searchStatus = error.localizedDescription
+        }
+    }
+
+    func accept(_ request: SupabaseFriendsService.IncomingRequest) async {
+        do {
+            try await service.acceptRequest(friendshipID: request.friendshipID)
+            await refresh()
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func decline(_ request: SupabaseFriendsService.IncomingRequest) async {
+        do {
+            try await service.deleteFriendship(friendshipID: request.friendshipID)
+            await refresh()
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    func revoke(_ friend: Friend) async {
+        do {
+            // Find the friendship row to delete via loadFriends bookkeeping.
+            try await service.deleteFriendshipWith(userID: friend.id)
+            await refresh()
+        } catch {
+            statusMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Reactions
+
+    func sendReaction(_ kind: ReactionKind, about period: Period, to friend: Friend) async {
+        lastSentReaction[friend.id.uuidString] = kind
+        do {
+            try await service.sendReaction(kind, to: friend.id, period: period)
+        } catch {
+            statusMessage = error.localizedDescription
+            lastSentReaction[friend.id.uuidString] = nil
             return
         }
-        #endif
-        // Reset the "Sent!" state so it's clear reactions can be sent again.
         try? await Task.sleep(for: .seconds(1.5))
-        if lastSentReaction[friend.id] == kind {
-            lastSentReaction[friend.id] = nil
+        if lastSentReaction[friend.id.uuidString] == kind {
+            lastSentReaction[friend.id.uuidString] = nil
         }
+    }
+
+    // MARK: - Account
+
+    func signOut() async {
+        await SupabaseManager.shared.signOut()
+        friends = []
+        incoming = []
+        receivedReactions = []
+        state = .signedOut
     }
 }
