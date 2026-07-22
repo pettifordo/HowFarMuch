@@ -5,7 +5,9 @@ struct FriendDetailView: View {
     let friend: Friend
     @Bindable var friendsViewModel: FriendsViewModel
 
+    @Environment(\.dismiss) private var dismiss
     @State private var period: Period
+    @State private var confirmRemove = false
 
     init(friend: Friend, initialPeriod: Period, friendsViewModel: FriendsViewModel) {
         self.friend = friend
@@ -43,6 +45,26 @@ struct FriendDetailView: View {
         .navigationTitle(friend.feed.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbar {
+            Menu {
+                Button(role: .destructive) {
+                    confirmRemove = true
+                } label: { Label("Remove friend", systemImage: "person.badge.minus") }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+        .alert("Remove \(friend.feed.name)?", isPresented: $confirmRemove) {
+            Button("Remove", role: .destructive) {
+                Task {
+                    await friendsViewModel.revoke(friend)
+                    dismiss()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("You'll both stop seeing each other's totals. You can add them again later.")
+        }
     }
 
     // MARK: - Header

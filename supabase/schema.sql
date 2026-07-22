@@ -69,6 +69,16 @@ create or replace function are_friends(a uuid, b uuid) returns boolean as $$
   );
 $$ language sql stable security definer;
 
+-- Do two users have ANY friendship row (pending or accepted)? Used so you can
+-- see the profile of someone whose request you've received, before accepting.
+create or replace function has_friendship(a uuid, b uuid) returns boolean as $$
+  select exists (
+    select 1 from friendships f
+    where (f.requester_id = a and f.addressee_id = b)
+       or (f.requester_id = b and f.addressee_id = a)
+  );
+$$ language sql stable security definer;
+
 -- Handle discovery: exact, opted-in match only (no table enumeration).
 create or replace function find_profile_by_handle(p_handle citext)
 returns table (id uuid, handle citext, display_name text, emoji text) as $$
@@ -92,13 +102,14 @@ alter table summaries   enable row level security;
 alter table friendships enable row level security;
 alter table reactions   enable row level security;
 
--- profiles: own row full access; friends can read each other's profile.
+-- profiles: own row full access; you can read the profile of anyone you have a
+-- friendship row with (pending or accepted) — needed to show incoming requests.
 drop policy if exists profiles_self on profiles;
 create policy profiles_self on profiles
   for all using (id = auth.uid()) with check (id = auth.uid());
 drop policy if exists profiles_friends_read on profiles;
 create policy profiles_friends_read on profiles
-  for select using (are_friends(auth.uid(), id));
+  for select using (has_friendship(auth.uid(), id));
 
 -- summaries: read own or an accepted friend's; write own only.
 drop policy if exists summaries_read on summaries;

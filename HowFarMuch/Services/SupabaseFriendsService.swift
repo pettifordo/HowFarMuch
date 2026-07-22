@@ -108,7 +108,9 @@ struct SupabaseFriendsService {
         let toId: UUID
         let kind: String
         let periodType: String
-        let createdAt: Date
+        /// Kept as the raw ISO string and parsed leniently — avoids the whole
+        /// fetch failing if the timestamp format doesn't match a strict decoder.
+        let createdAt: String
         enum CodingKeys: String, CodingKey {
             case id, kind
             case fromId = "from_id"
@@ -116,6 +118,21 @@ struct SupabaseFriendsService {
             case periodType = "period_type"
             case createdAt = "created_at"
         }
+    }
+
+    private static let isoParsers: [ISO8601DateFormatter] = {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return [withFraction, plain]
+    }()
+
+    private static func parseDate(_ string: String) -> Date {
+        for parser in isoParsers {
+            if let date = parser.date(from: string) { return date }
+        }
+        return .now
     }
 
     // MARK: - Profile & handle
@@ -146,6 +163,14 @@ struct SupabaseFriendsService {
         guard let uid = SupabaseManager.shared.currentUserID else { return }
         try await client.from("profiles")
             .update(["sharing_enabled": enabled])
+            .eq("id", value: uid.uuidString).execute()
+    }
+
+    /// Push name/emoji edits (from Settings) to the profile so friends see them.
+    func updateProfileDetails(name: String, emoji: String) async throws {
+        guard let uid = SupabaseManager.shared.currentUserID else { return }
+        try await client.from("profiles")
+            .update(["display_name": name, "emoji": emoji])
             .eq("id", value: uid.uuidString).execute()
     }
 
@@ -246,7 +271,9 @@ struct SupabaseFriendsService {
         let feeds = try await summaries(ids: friendIDs)
 
         let friends: [Friend] = friendIDs.compactMap { fid in
-            guard let profile = profileByID[fid], let feed = feeds[fid] else { return nil }
+            guard let profile = profileByID[fid] else { return nil }
+            // Show the friend even if their summary hasn't loaded/published yet.
+            let feed = feeds[fid] ?? FriendFeed(name: profile.displayName, emoji: profile.emoji, buckets: [])
             return Friend(id: fid, handle: profile.handle, feed: feed)
         }.sorted { $0.feed.name < $1.feed.name }
 
@@ -275,7 +302,7 @@ struct SupabaseFriendsService {
             guard let kind = ReactionKind(rawValue: row.kind) else { return nil }
             return Reaction(
                 id: row.id, kind: kind, periodType: row.periodType,
-                fromName: nameByID[row.fromId] ?? "A friend", date: row.createdAt
+                fromName: nameByID[row.fromId] ?? "A friend", date: Self.parseDate(row.createdAt)
             )
         }
     }

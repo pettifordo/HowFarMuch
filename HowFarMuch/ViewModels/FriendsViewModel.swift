@@ -148,13 +148,27 @@ final class FriendsViewModel {
     }
 
     func sendRequest(to profile: SupabaseFriendsService.ProfileRow) async {
+        // If they've already sent me a request, accept it instead of creating
+        // a second (opposite-direction) row.
+        if let existing = incoming.first(where: { $0.profile.id == profile.id }) {
+            await accept(existing)
+            searchStatus = "You're now friends with @\(profile.handle) 🎉"
+            searchResult = nil
+            return
+        }
         do {
             try await service.sendRequest(to: profile.id)
             searchStatus = "Request sent to @\(profile.handle) 🎉"
             searchResult = nil
             await refresh()
         } catch {
-            searchStatus = Self.message(for: error)
+            let text = "\(error)".lowercased()
+            if text.contains("duplicate") || text.contains("23505") {
+                searchStatus = "You've already sent @\(profile.handle) a request."
+                searchResult = nil
+            } else {
+                searchStatus = Self.message(for: error)
+            }
         }
     }
 
@@ -201,6 +215,14 @@ final class FriendsViewModel {
         if lastSentReaction[friend.id.uuidString] == kind {
             lastSentReaction[friend.id.uuidString] = nil
         }
+    }
+
+    /// Called when Settings closes: push any name/emoji edits to the profile.
+    func pushProfileEdits() async {
+        guard state == .ready else { return }
+        try? await service.updateProfileDetails(
+            name: AppSettings.displayName, emoji: AppSettings.displayEmoji
+        )
     }
 
     // MARK: - Account
