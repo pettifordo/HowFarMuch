@@ -250,10 +250,11 @@ struct DashboardView: View {
             }
             .padding(.top, 60)
             .padding(.horizontal, 24)
-        } else if let message = viewModel.errorMessage {
+        } else if let message = viewModel.errorMessage, viewModel.allStats.isEmpty {
+            let waiting = message.hasPrefix("Waiting")
             emptyState(
-                symbol: "heart.text.square",
-                title: "Can't read Health data",
+                symbol: waiting ? "lock.rotation" : "heart.text.square",
+                title: waiting ? "Just a moment…" : "Can't read Health data",
                 message: message
             )
         } else if viewModel.allStats.isEmpty {

@@ -66,14 +66,20 @@ final class FriendsViewModel {
             AppSettings.displayEmoji = profile.emoji
             state = .ready
 
-            // Build my feed for comparison; publish it if sharing is on.
-            let filtered = WorkoutFilters.apply(
-                try await healthKit.fetchWorkouts(from: .distantPast)
-            ).kept
-            let feed = FeedBuilder.buildFeed(from: filtered)
-            myFeed = feed
-            if profile.sharingEnabled {
-                try await service.publishSummary(feed)
+            // Build my feed for comparison; publish it if sharing is on. If
+            // Health is momentarily locked, skip this cycle rather than failing —
+            // loading friends from Supabase doesn't need Health at all.
+            do {
+                let filtered = WorkoutFilters.apply(
+                    try await healthKit.fetchWorkouts(from: .distantPast)
+                ).kept
+                let feed = FeedBuilder.buildFeed(from: filtered)
+                myFeed = feed
+                if profile.sharingEnabled {
+                    try await service.publishSummary(feed)
+                }
+            } catch {
+                if !HealthKitService.isDeviceLocked(error) { throw error }
             }
             let result = try await service.loadFriends()
             friends = result.friends

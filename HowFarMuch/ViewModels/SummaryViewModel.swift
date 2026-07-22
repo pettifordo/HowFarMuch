@@ -139,17 +139,32 @@ final class SummaryViewModel {
         }
         isLoading = true
         defer { isLoading = false }
-        do {
-            if !hasRequestedAuthorization {
-                try await healthKit.requestAuthorization()
-                hasRequestedAuthorization = true
+        // Health can be momentarily locked (e.g. just after unlocking). Retry a
+        // couple of times before showing anything, so it doesn't flash an error.
+        for attempt in 0..<3 {
+            do {
+                if !hasRequestedAuthorization {
+                    try await healthKit.requestAuthorization()
+                    hasRequestedAuthorization = true
+                }
+                fetchedWorkouts = try await healthKit.fetchWorkouts(from: period.startDate)
+                allWorkouts = applySettings(to: fetchedWorkouts)
+                allStats = ActivityStats.aggregate(allWorkouts)
+                isDemoData = false
+                errorMessage = nil
+                break
+            } catch {
+                if HealthKitService.isDeviceLocked(error) {
+                    errorMessage = "Waiting to read your workouts — unlock your phone if it's locked."
+                    if attempt < 2 {
+                        try? await Task.sleep(for: .seconds(1.5))
+                        continue
+                    }
+                } else {
+                    loadDemoDataIfSimulator(reason: error.localizedDescription)
+                }
+                break
             }
-            fetchedWorkouts = try await healthKit.fetchWorkouts(from: period.startDate)
-            allWorkouts = applySettings(to: fetchedWorkouts)
-            allStats = ActivityStats.aggregate(allWorkouts)
-            isDemoData = false
-        } catch {
-            loadDemoDataIfSimulator(reason: error.localizedDescription)
         }
         #endif
         publishSnapshot()

@@ -17,7 +17,7 @@ settings:
     # Single source of truth for versions — both targets' Info.plists
     # reference these, so app and widget extension always match.
     MARKETING_VERSION: "2.0"
-    CURRENT_PROJECT_VERSION: 17
+    CURRENT_PROJECT_VERSION: 18
 targets:
   HowFarMuch:
     type: application

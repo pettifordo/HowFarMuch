@@ -7,6 +7,16 @@ final class HealthKitService {
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
+    /// True when Health couldn't be read because the device is locked — a
+    /// transient condition that resolves once the phone is unlocked.
+    static func isDeviceLocked(_ error: Error) -> Bool {
+        if let hkError = error as? HKError,
+           hkError.code == .errorDatabaseInaccessible || hkError.code == .errorHealthDataUnavailable {
+            return true
+        }
+        return "\(error)".lowercased().contains("protected health data")
+    }
+
     func requestAuthorization() async throws {
         let readTypes: Set<HKObjectType> = [
             .workoutType(),
