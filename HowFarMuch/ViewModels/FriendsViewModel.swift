@@ -11,6 +11,7 @@ final class FriendsViewModel {
     }
 
     var state: State = .signedOut
+    var myHandle: String?
     var friends: [Friend] = []
     /// My own feed, for comparing myself against friends per period.
     var myFeed: FriendFeed?
@@ -64,6 +65,7 @@ final class FriendsViewModel {
             // Keep local display name/emoji in step with the profile.
             AppSettings.displayName = profile.displayName
             AppSettings.displayEmoji = profile.emoji
+            myHandle = profile.handle
             state = .ready
 
             // Build my feed for comparison; publish it if sharing is on. If

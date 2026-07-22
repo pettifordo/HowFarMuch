@@ -6,6 +6,9 @@ struct FriendsTabView: View {
     @Bindable var viewModel: SummaryViewModel
     @Bindable var friendsViewModel: FriendsViewModel
 
+    @State private var controlsExpanded = false
+    @State private var confirmHandle = false
+
     private let lime = Color(red: 0.6, green: 0.95, blue: 0.3)
 
     var body: some View {
@@ -84,7 +87,7 @@ struct FriendsTabView: View {
             }
 
             Button {
-                Task { await friendsViewModel.claimHandle() }
+                confirmHandle = true
             } label: {
                 Text("Claim handle")
                     .font(.system(.headline, design: .rounded))
@@ -96,6 +99,12 @@ struct FriendsTabView: View {
             }
             .buttonStyle(.plain)
             .disabled(friendsViewModel.handleAvailable != true)
+            .alert("Claim @\(friendsViewModel.handleDraft.lowercased())?", isPresented: $confirmHandle) {
+                Button("Claim") { Task { await friendsViewModel.claimHandle() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This becomes your permanent handle — it can't be changed later. Friends will use it to find you.")
+            }
 
             if let message = friendsViewModel.statusMessage {
                 Text(message).font(.system(.caption, design: .rounded)).foregroundStyle(.orange)
@@ -108,9 +117,19 @@ struct FriendsTabView: View {
     private var ready: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Friends").font(.system(.title, design: .rounded, weight: .heavy))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Friends").font(.system(.title, design: .rounded, weight: .heavy))
+                    if let handle = friendsViewModel.myHandle {
+                        Text("@\(handle)")
+                            .font(.system(.caption, design: .rounded, weight: .semibold))
+                            .foregroundStyle(.cyan)
+                    }
+                }
                 Spacer()
                 Menu {
+                    if let handle = friendsViewModel.myHandle {
+                        Section("Signed in as @\(handle)") {}
+                    }
                     Button(role: .destructive) {
                         Task { await friendsViewModel.signOut() }
                     } label: { Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right") }
@@ -119,8 +138,8 @@ struct FriendsTabView: View {
                         .font(.title3).foregroundStyle(.secondary)
                 }
             }
-            Text("Comparing \(viewModel.metric.rawValue.lowercased()) \(viewModel.period.phrase). Change these on the Me tab.")
-                .font(.system(.caption, design: .rounded)).foregroundStyle(.secondary)
+
+            CompactControlsView(viewModel: viewModel, expanded: $controlsExpanded)
 
             searchBar
             if let status = friendsViewModel.searchStatus {
